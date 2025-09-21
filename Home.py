@@ -127,7 +127,8 @@ def load_data(round_id, chain_id):
     rounds = get_round_summary_graphql(chain_id, round_id)
     
     token = rounds['token'].values[0] if 'token' in rounds else 'ETH'    
-    sybilDefense = rounds['sybilDefense'].values[0] if 'sybilDefense' in rounds else 'None'
+    # sybilDefense = rounds['sybilDefense'].values[0] if 'sybilDefense' in rounds else 'None'
+    sybilDefense = 'None'
     df = get_votes_by_round_graphql(chain_id, round_id)
 
     # with open("votes.txt", "w") as f:

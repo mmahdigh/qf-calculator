@@ -5,6 +5,19 @@ import requests
 # Cache TTL values
 ttl_short = 900  # 15 minutes
 
+INDEXER_URL = "https://indexer.gitcoin.co/v1/graphql"
+INDEXER_HEADERS = {"Content-Type": "application/json"}
+try:
+    INDEXER_URL = st.secrets['indexer']['GRAPHQL_URL']
+except Exception:
+    pass
+try:
+    api_key = st.secrets['indexer']['API_KEY']
+    if api_key:
+        INDEXER_HEADERS['x-api-key'] = api_key
+except Exception:
+    pass
+
 @st.cache_resource(ttl=ttl_short)
 def get_round_summary_graphql(chain_id=None, round_id=None):
     """
@@ -58,9 +71,9 @@ def get_round_summary_graphql(chain_id=None, round_id=None):
     # Make the GraphQL request
     try:
         response = requests.post(
-            "https://beta.indexer.gitcoin.co/v1/graphql",
+            INDEXER_URL,
             json={"query": query, "variables": variables},
-            headers={"Content-Type": "application/json"}
+            headers=INDEXER_HEADERS
         )
         response.raise_for_status()
         data = response.json()
