@@ -26,14 +26,40 @@ This project is a Streamlit-based web application that calculates and visualizes
 
 ## 🖥️ Usage
 
-1. Run the Streamlit app:
-   ```
-   streamlit run Home.py
-   ```
+### v6 Donation Export (CSV) calculator (recommended)
+
+This is the lightweight, **compute-only** workflow intended for admins to upload a v6 donation export CSV, run **QF** or **COCM**, see visualizations, and download results as CSV for re-upload to v6.
+
+Run:
+
+```
+streamlit run V6_CSV_Calculator.py
+```
+
+How it works:
+
+- **Upload**: your v6 QF Donation Export CSV
+- **Map columns**: pick which CSV columns correspond to donor address, project name/id, amount, etc.
+- **Set round params**: matching pool size, cap %, minimum donation threshold, and engine (QF/COCM)
+- **Compute + visualize**: matching distributions and top projects
+- **Download**: `v6_matching_results.csv`
+
+Notes:
+
+- **No writes back to v6**: this tool is read-only + compute-only.
+- **No external dependencies required**: it does not call indexer APIs, databases, or price feeds. If your donation amounts are not USD, you can provide a token price to convert to USD for calculations/export.
+
+### Legacy app (round explorer / Gitcoin-oriented)
+
+Run:
+
+```
+streamlit run Home.py
+```
 
 2. Access the app through your web browser, typically at `http://localhost:8501`
 
-3. Provide the `round_id` and `chain_id` as URL parameters:
+3. (Optional) Provide the `round_id` and `chain_id` as URL parameters:
    ```
    http://localhost:8501/?round_id=[ROUND_ID]&chain_id=[CHAIN_ID]
    ```

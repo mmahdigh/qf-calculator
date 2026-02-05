@@ -12,6 +12,7 @@ import utils
 import fundingutils
 from decimal import Decimal, getcontext
 import decimal
+import re
 
 
 # Page configuration
@@ -155,7 +156,7 @@ def load_data(round_id, chain_id):
         "score_at_100_percent": score_at_100_percent,
         "sybilDefense": sybilDefense,
         "chain_id": chain_id,
-        "matching_cap": float(rounds['matching_cap_amount'].values[0]) if rounds['matching_cap_amount'].values[0] is not None else 0.0,
+        "matching_cap": float(rounds['matching_cap_percentage'].values[0]) if rounds['matching_cap_percentage'].values[0] is not None else 0.0,
         "matching_available": float(rounds['matching_funds_available'].values[0]) if rounds['matching_funds_available'].values[0] is not None else 0.0,
 
     }
@@ -249,6 +250,164 @@ def handle_csv_upload(purpose='filter out'):
         
         return csv
     return None
+
+def validate_round_csv_df(df):
+    """Validate uploaded round CSV and split into donations df and single-row rounds df.
+    Expects a single CSV containing both donation rows and constant round metadata columns.
+    """
+    # Required columns used by the app downstream
+    required_donation_cols = {
+        'voter', 'recipient_address', 'amountUSD', 'project_name',
+        'application_id', 'project_id', 'chain_id', 'round_id'
+    }
+    required_round_cols = {
+        'token', 'matching_cap_percentage', 'matching_funds_available'
+    }
+
+    missing = (required_donation_cols | required_round_cols) - set(df.columns)
+    if missing:
+        st.error(
+            "The uploaded CSV is missing required columns: " + ", ".join(sorted(missing))
+        )
+        st.stop()
+
+    # Normalize address-like columns to lowercase strings
+    for col in ['voter', 'recipient_address', 'token']:
+        df[col] = df[col].astype(str).str.strip().str.lower()
+
+    # Basic type validations and coercions
+    errors = []
+
+    # chain_id must be numeric and constant
+    try:
+        df['chain_id'] = pd.to_numeric(df['chain_id']).astype(int)
+    except Exception:
+        errors.append("'chain_id' must be an integer for all rows")
+
+    # round_id as string and constant
+    df['round_id'] = df['round_id'].astype(str).str.strip()
+
+    # amountUSD numeric and non-negative
+    try:
+        df['amountUSD'] = pd.to_numeric(df['amountUSD']).astype(float)
+        if (df['amountUSD'] < 0).any():
+            errors.append("'amountUSD' contains negative values")
+    except Exception:
+        errors.append("'amountUSD' must be numeric")
+
+    # matching_* numeric
+    for col in ['matching_cap_percentage', 'matching_funds_available']:
+        try:
+            df[col] = pd.to_numeric(df[col]).astype(float)
+        except Exception:
+            errors.append(f"'{col}' must be numeric")
+
+    # Optional: min_donation_threshold_amount
+    if 'min_donation_threshold_amount' in df.columns:
+        try:
+            df['min_donation_threshold_amount'] = pd.to_numeric(df['min_donation_threshold_amount']).astype(float)
+        except Exception:
+            errors.append("'min_donation_threshold_amount' must be numeric if provided")
+    else:
+        df['min_donation_threshold_amount'] = 0.0
+
+    # Optional: round_name
+    if 'round_name' not in df.columns:
+        df['round_name'] = 'Uploaded Round'
+    df['round_name'] = df['round_name'].astype(str)
+
+    # Address format validations
+    def invalid_addresses(series):
+        pattern = re.compile(r'^0x[a-f0-9]{40}$')
+        mask = ~series.fillna('').str.match(pattern)
+        return series[mask].dropna().unique().tolist()
+
+    bad_voters = invalid_addresses(df['voter'])
+    bad_recipients = invalid_addresses(df['recipient_address'])
+    bad_token = invalid_addresses(df['token'])
+    if bad_voters:
+        errors.append(f"Invalid 'voter' addresses (sample): {bad_voters[:5]}")
+    if bad_recipients:
+        errors.append(f"Invalid 'recipient_address' values (sample): {bad_recipients[:5]}")
+    if bad_token:
+        errors.append(f"Invalid 'token' value (sample): {bad_token[:1]}")
+
+    # Consistency checks (must be constant across file)
+    for col in ['chain_id', 'round_id', 'token', 'matching_cap_percentage', 'matching_funds_available', 'min_donation_threshold_amount', 'round_name']:
+        if df[col].nunique(dropna=True) != 1:
+            errors.append(f"Column '{col}' must have a single value for the entire file")
+
+    if errors:
+        st.error("CSV validation failed:\n- " + "\n- ".join(errors))
+        st.stop()
+
+    # Build single-row rounds dataframe
+    rounds_row = {
+        'round_id': df['round_id'].iloc[0],
+        'chain_id': int(df['chain_id'].iloc[0]),
+        'amountUSD': float(df['amountUSD'].sum()),
+        'votes': int(len(df)),
+        'uniqueContributors': int(df['voter'].nunique()),
+        'donations_start_time': None,
+        'donations_end_time': None,
+        'token': df['token'].iloc[0],
+        'round_name': df['round_name'].iloc[0],
+        'matching_cap_percentage': float(df['matching_cap_percentage'].iloc[0]),
+        'matching_funds_available': float(df['matching_funds_available'].iloc[0]),
+        'min_donation_threshold_amount': float(df['min_donation_threshold_amount'].iloc[0]),
+    }
+    rounds_df = pd.DataFrame([rounds_row])
+
+    # Ensure key string fields are strings
+    for c in ['project_name', 'application_id', 'project_id']:
+        df[c] = df[c].astype(str)
+
+    return df, rounds_df
+
+def load_data_from_csv(donations_df, rounds_df):
+    """Prepare the data dict used by the rest of the app from validated CSV inputs."""
+    blockchain_mapping = {1: "Ethereum", 10: "Optimism", 137: "Polygon", 250: "Fantom",
+                          324: "ZKSync", 8453: "Base", 42161: "Arbitrum", 43114: "Avalanche",
+                          534352: "Scroll", 1329: "SEI", 42220: "Celo", 1088: "Metis", 42: "Lukso" }
+
+    chain_id = int(rounds_df['chain_id'].values[0])
+    token = rounds_df['token'].values[0] if 'token' in rounds_df else '0x0000000000000000000000000000000000000000'
+    sybilDefense = 'None'
+
+    # Fetch token configuration and price
+    config_df = utils.fetch_tokens_config()
+    if config_df is None:
+        st.error("Unable to load tokens configuration. Please check network connectivity and try again.")
+        st.stop()
+    config_df = config_df[(config_df['chain_id'] == chain_id) & (config_df['token_address'] == token.lower())]
+    if config_df.empty:
+        st.error("Token configuration not found for provided 'chain_id' and 'token'.")
+        st.stop()
+    matching_token_price = utils.fetch_latest_price(
+        int(config_df['price_source_chain_id'].iloc[0]),
+        config_df['price_source_address'].iloc[0]
+    )
+
+    unique_voters = donations_df['voter'].unique()
+    scores, score_at_50_percent, score_at_100_percent, sybilDefense = load_scores_and_set_defense(chain_id, sybilDefense, unique_voters)
+    # Merge scores with the main dataframe
+    df = pd.merge(donations_df, scores[['address', 'rawScore']], left_on='voter', right_on='address', how='left')
+    df['rawScore'] = df['rawScore'].fillna(0)
+
+    return {
+        "blockchain_mapping": blockchain_mapping,
+        "rounds": rounds_df,
+        "df": df,
+        "config_df": config_df,
+        "matching_token_price": matching_token_price,
+        "scores": scores,
+        "score_at_50_percent": score_at_50_percent,
+        "score_at_100_percent": score_at_100_percent,
+        "sybilDefense": sybilDefense,
+        "chain_id": chain_id,
+        "matching_cap": float(rounds_df['matching_cap_percentage'].values[0]) if rounds_df['matching_cap_percentage'].values[0] is not None else 0.0,
+        "matching_available": float(rounds_df['matching_funds_available'].values[0]) if rounds_df['matching_funds_available'].values[0] is not None else 0.0,
+    }
 
 def display_network_graph(df):
     """Display a 3D network graph of voters and grants."""
@@ -556,18 +715,18 @@ def calculate_matching_results(data):
     
     #donation_matrix.to_csv('name me'.csv')
 
-    matching_cap_amount = data['matching_cap']
+    matching_cap_percentage = data['matching_cap']
     matching_amount = data['matching_available']
 
     # Calculate matching amounts using both COCM and QF strategies
-    matching_dfs = [fundingutils.get_qf_matching(strategy, donation_matrix, matching_cap_amount, matching_amount, cluster_df=donation_matrix, pct_cocm=data['pct_COCM']) 
+    matching_dfs = [fundingutils.get_qf_matching(strategy, donation_matrix, matching_cap_percentage, matching_amount, cluster_df=donation_matrix, pct_cocm=data['pct_COCM']) 
                     for strategy in [data['strat'], 'QF']]
 
     matching_dfs.append(fundingutils.tunable_qf(
         donation_matrix,
         data['token_distribution_df'],
         'TQF',
-        matching_cap_amount,
+        matching_cap_percentage,
         matching_amount,
     ))
 
@@ -575,7 +734,7 @@ def calculate_matching_results(data):
         donation_matrix,
         data['token_distribution_df'],
         data['strat'],
-        matching_cap_amount,
+        matching_cap_percentage,
         matching_amount,
         cluster_df=donation_matrix, 
         pct_cocm=data['pct_COCM']
@@ -686,22 +845,34 @@ def prepare_output_dataframe(matching_df, strategy_choice, data):
     # Select relevant columns and rename them
     output_df = matching_df[['project_name', f'matching_amount_{strategy_choice}']]
     output_df = output_df.rename(columns={f'matching_amount_{strategy_choice}': 'matched'})
-    
-    # Get projects in the round
-    projects_df = get_project_summary_graphql(data['chain_id'], data['rounds']['round_id'].iloc[0])
-    projects_df = projects_df[~projects_df['project_name'].isin(data['projects_to_remove'])]
-    
+
+    # Build projects summary from uploaded donations (avoid GraphQL)
+    donations = data['df'].copy()
+    donations = donations[~donations['project_name'].isin(data['projects_to_remove'])]
+
+    grouped = donations.groupby(['application_id', 'project_id', 'project_name', 'recipient_address'], as_index=False).agg({
+        'amountUSD': 'sum',
+        'voter': 'count'
+    })
+    grouped = grouped.rename(columns={
+        'application_id': 'id',
+        'project_id': 'project_id',
+        'project_name': 'project_name',
+        'recipient_address': 'recipient_address',
+        'voter': 'total_donations_count',
+        'amountUSD': 'total_amount_donated_in_usd'
+    })
+
     # CUSTOM RULE: Remove application ID 90 from round 608, duplicate project
     if data['rounds']['round_id'].iloc[0] == '608' and data['chain_id'] == 42161:
-        if '90' in projects_df['id'].values:
-            projects_df = projects_df[projects_df['id'] != '90']
-    
-    output_df = pd.merge(output_df, projects_df, left_on='project_name', right_on='project_name', how='outer')
+        grouped = grouped[grouped['id'] != '90']
+
+    output_df = pd.merge(output_df, grouped, left_on='project_name', right_on='project_name', how='outer')
     output_df = output_df.rename(columns={
-        'id': 'applicationId', 
-        'project_id': 'projectId', 
-        'project_name': 'projectName', 
-        'recipient_address': 'payoutAddress', 
+        'id': 'applicationId',
+        'project_id': 'projectId',
+        'project_name': 'projectName',
+        'recipient_address': 'payoutAddress',
         'total_donations_count': 'contributionsCount',
         'total_amount_donated_in_usd': 'totalReceived'
     })
@@ -942,9 +1113,9 @@ def combine_token_distributions(token_dfs):
 def main():
     """Main function to run the Streamlit app."""
     st.image('assets/657c7ed16b14af693c08b92d_GTC-Logotype-Dark.png', width=200)
-    round_id, chain_id = validate_input()
-    
-    check_round_existence(round_id, chain_id)
+    st.header("Upload Round Donations CSV")
+    st.write("Provide a CSV containing donation rows and round metadata as columns. See README for schema.")
+    uploaded_round_file = st.file_uploader("Round CSV", type=["csv"], key="round_csv")
 
     # Advanced options 
 
@@ -984,8 +1155,13 @@ def main():
                     Pure QF results are always available separately.''')
         c1,c2,c3 = st.columns(3)
         pct = c1.slider('Percent COCM', min_value = 0.25, max_value=1.0, value=1.0, step=0.25)
-    # Load and process data
-    data = load_data(round_id, chain_id)
+    # Load and process data from CSV
+    if uploaded_round_file is None:
+        st.info("Awaiting CSV upload to compute results.")
+        st.stop()
+    raw_df = pd.read_csv(uploaded_round_file)
+    donations_df, rounds_df = validate_round_csv_df(raw_df)
+    data = load_data_from_csv(donations_df, rounds_df)
     data['scaling_df'] = scaling_df
 
     data['using TQF'] = False
