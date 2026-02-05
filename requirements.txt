@@ -1,7 +1,8 @@
-plotly
-streamlit
-pandas==2.0.3
-numpy==1.24.3
-psycopg2-binary
-networkx
-scipy
+streamlit>=1.54.0
+plotly>=6.0.0
+
+# Python 3.13 compatible (avoid source builds on Streamlit Cloud)
+numpy>=2.0.0
+pandas>=2.2.0
+
+networkx>=3.0
