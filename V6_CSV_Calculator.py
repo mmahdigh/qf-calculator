@@ -17,6 +17,8 @@ class RoundParams:
     matching_pool_usd: float
     matching_cap_percentage: float
     min_donation_threshold_usd: float
+    min_passport_score: Optional[float]
+    min_model_score: Optional[float]
     engine: str  # "QF" | "COCM"
     token_symbol: str
     token_decimals: Optional[int]
@@ -48,13 +50,25 @@ def _coerce_numeric_series(s: pd.Series) -> pd.Series:
 
 
 def _filter_donations(
-    donations_df: pd.DataFrame, *, min_donation_threshold_usd: float
+    donations_df: pd.DataFrame,
+    *,
+    min_donation_threshold_usd: float,
+    min_passport_score: Optional[float] = None,
+    min_model_score: Optional[float] = None,
 ) -> pd.DataFrame:
     df = donations_df.copy()
     df = df[df["amountUSD"].notna()]
     df = df[df["amountUSD"] > 0]
     if min_donation_threshold_usd > 0:
         df = df[df["amountUSD"] >= float(min_donation_threshold_usd)]
+
+    # Filter by Passport Score threshold if the column exists and a threshold is set.
+    if min_passport_score is not None and min_passport_score > 0 and "score" in df.columns:
+        df = df[df["score"].fillna(0) >= float(min_passport_score)]
+
+    # Filter by Model Score threshold if the column exists and a threshold is set.
+    if min_model_score is not None and min_model_score > 0 and "mbdScore" in df.columns:
+        df = df[df["mbdScore"].fillna(0) >= float(min_model_score)]
 
     # If we have payout addresses, drop self-votes.
     if "recipient_address" in df.columns and df["recipient_address"].astype(str).str.len().gt(0).any():
@@ -71,6 +85,8 @@ def _build_canonical_donations_df(
     amount_col: str,
     project_id_col: Optional[str],
     payout_address_col: Optional[str],
+    score_col: Optional[str],
+    mbd_score_col: Optional[str],
     treat_amount_as_usd: bool,
     token_price_usd: Optional[float],
 ) -> pd.DataFrame:
@@ -111,6 +127,12 @@ def _build_canonical_donations_df(
         # Still provide stable ids for downstream export.
         out["project_id"] = out["project_name"]
         out["application_id"] = out["project_name"]
+
+    # Optional score columns
+    if score_col:
+        out["score"] = _coerce_numeric_series(raw_df[score_col])
+    if mbd_score_col:
+        out["mbdScore"] = _coerce_numeric_series(raw_df[mbd_score_col])
 
     # placeholders (some existing helper logic expects these names to exist)
     out["chain_id"] = 0
@@ -377,6 +399,8 @@ def main() -> None:
     default_amount = _guess_col(raw_df, ["amountusd", "amount_usd", "usd", "amount"])
     default_project_id = _guess_col(raw_df, ["project_id", "projectid", "application_id", "applicationid", "id"])
     default_payout = _guess_col(raw_df, ["recipient_address", "payout", "to", "recipient", "project_address"])
+    default_score = _guess_col(raw_df, ["score", "passport_score", "passportscore", "passport score"])
+    default_mbd_score = _guess_col(raw_df, ["mbdscore", "mbd_score", "model_score", "modelscore", "model score"])
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -391,9 +415,11 @@ def main() -> None:
         project_id_col = st.selectbox("Project ID column (optional)", options=["(none)"] + list(raw_df.columns), index=(1 + list(raw_df.columns).index(default_project_id) if default_project_id in raw_df.columns else 0))
     with c3:
         amount_col = st.selectbox("Donation amount column", options=list(raw_df.columns), index=(list(raw_df.columns).index(default_amount) if default_amount in raw_df.columns else 0))
+        score_col = st.selectbox("Passport Score column (optional)", options=["(none)"] + list(raw_df.columns), index=(1 + list(raw_df.columns).index(default_score) if default_score in raw_df.columns else 0))
+        mbd_score_col = st.selectbox("Model Score column (optional)", options=["(none)"] + list(raw_df.columns), index=(1 + list(raw_df.columns).index(default_mbd_score) if default_mbd_score in raw_df.columns else 0))
 
     st.subheader("Round parameters")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         round_name = st.text_input("Round name", value="Uploaded round")
         engine = st.radio("Engine", options=["QF", "COCM"], horizontal=True)
@@ -410,12 +436,33 @@ def main() -> None:
         if not treat_amount_as_usd:
             token_price_usd = st.number_input("Token price (USD)", min_value=0.0, value=1.0, step=0.01)
             token_decimals = st.number_input("Token decimals", min_value=0, max_value=36, value=18, step=1)
+    with c5:
+        _has_score_col = score_col != "(none)"
+        _has_mbd_col = mbd_score_col != "(none)"
+        min_passport_score = st.number_input(
+            "Min Passport Score",
+            min_value=0.0, value=0.0, step=1.0,
+            disabled=not _has_score_col,
+            help="Donations with a Passport Score below this threshold are excluded. Requires a Passport Score column.",
+        )
+        min_model_score = st.number_input(
+            "Min Model Score",
+            min_value=0.0, value=0.0, step=1.0,
+            disabled=not _has_mbd_col,
+            help="Donations with a Model Score below this threshold are excluded. Requires a Model Score column.",
+        )
+        if not _has_score_col:
+            min_passport_score = None
+        if not _has_mbd_col:
+            min_model_score = None
 
     params = RoundParams(
         round_name=round_name.strip() or "Uploaded round",
         matching_pool_usd=float(matching_pool_usd),
         matching_cap_percentage=float(matching_cap_percentage),
         min_donation_threshold_usd=float(min_donation_threshold_usd),
+        min_passport_score=(float(min_passport_score) if min_passport_score is not None else None),
+        min_model_score=(float(min_model_score) if min_model_score is not None else None),
         engine=engine,
         token_symbol=token_symbol.strip() or "USD",
         token_decimals=(int(token_decimals) if token_decimals is not None else None),
@@ -434,6 +481,8 @@ def main() -> None:
             amount_col=amount_col,
             project_id_col=None if project_id_col == "(none)" else project_id_col,
             payout_address_col=None if payout_col == "(none)" else payout_col,
+            score_col=None if score_col == "(none)" else score_col,
+            mbd_score_col=None if mbd_score_col == "(none)" else mbd_score_col,
             treat_amount_as_usd=treat_amount_as_usd,
             token_price_usd=params.token_price_usd,
         )
@@ -441,7 +490,12 @@ def main() -> None:
         st.error(f"Failed to parse donations from CSV: {e}")
         return
 
-    donations_df = _filter_donations(donations_df, min_donation_threshold_usd=params.min_donation_threshold_usd)
+    donations_df = _filter_donations(
+        donations_df,
+        min_donation_threshold_usd=params.min_donation_threshold_usd,
+        min_passport_score=params.min_passport_score,
+        min_model_score=params.min_model_score,
+    )
     if donations_df.empty:
         st.warning("No eligible donations found after filtering.")
         return
