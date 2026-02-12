@@ -149,6 +149,7 @@ def _compute_matching(
     engine: str,
     matching_pool_usd: float,
     matching_cap_percentage: float,
+    harsh: bool = True,
 ) -> pd.DataFrame:
     donation_matrix = fundingutils.pivot_votes(donations_df)
     # Use donation profiles as the "cluster" signal for COCM, consistent with the existing app.
@@ -159,6 +160,7 @@ def _compute_matching(
         matching_pool_usd,
         cluster_df=donation_matrix,
         pct_cocm=1.0,
+        harsh=harsh,
     )
     # Normalize column naming to "matchedUSD"
     matching_df = matching_df.rename(columns={"matching_amount": "matchedUSD"})
@@ -423,6 +425,12 @@ def main() -> None:
     with c1:
         round_name = st.text_input("Round name", value="Uploaded round")
         engine = st.radio("Engine", options=["QF", "COCM"], horizontal=True)
+        harsh = st.toggle(
+            "Harsh (COCM)",
+            value=True,
+            disabled=engine != "COCM",
+            help="When enabled, COCM uses harsh scaling (`harsh=True`).",
+        )
     with c2:
         matching_pool_usd = st.number_input("Matching pool (USD)", min_value=0.0, value=50000.0, step=1000.0)
         matching_cap_percentage = st.slider("Matching cap (%)", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
@@ -513,6 +521,7 @@ def main() -> None:
             engine=params.engine,
             matching_pool_usd=params.matching_pool_usd,
             matching_cap_percentage=params.matching_cap_percentage,
+            harsh=harsh,
         )
 
     results_df = _build_results_export(donations_df, matching_df, params)

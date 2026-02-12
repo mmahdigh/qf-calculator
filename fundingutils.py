@@ -351,24 +351,24 @@ def crossfade(dict_1, dict_2, pct=0.5):
   return {p: (dict_1[p] * pct) + (dict_2[p] * (1-pct)) for p in dict_1.keys()}
 
 @st.cache_resource(ttl=36000)
-def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df = None, pct_cocm=None):
+def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df = None, pct_cocm=None, harsh=True):
     projects = donation_df.columns
     if algo == 'donation_profile_clustermatch':
         funding = donation_profile_clustermatch(donation_df)
     elif algo == 'pairwise':
         funding = pairwise(donation_df)
     elif algo == 'COCM': #markov
-        funding = COCM(donation_df, cluster_df)
+        funding = COCM(donation_df, cluster_df, harsh=harsh)
     elif algo == 'COCM og':
-        funding = COCM(donation_df, cluster_df, calcstyle='og')
+        funding = COCM(donation_df, cluster_df, calcstyle='og', harsh=harsh)
     elif algo == 'COCM pct_friends':
-        funding = COCM(donation_df, cluster_df, calcstyle='pct_friends')
+        funding = COCM(donation_df, cluster_df, calcstyle='pct_friends', harsh=harsh)
     elif algo == 'half-and-half':
-        cocm_normalized = normalize(COCM(donation_df, cluster_df))
+        cocm_normalized = normalize(COCM(donation_df, cluster_df, harsh=harsh))
         std_qf_normalized = normalize(standard_qf(donation_df))
         funding = crossfade(cocm_normalized, std_qf_normalized)
     elif algo == 'pctCOCM':
-        cocm_normalized = normalize(COCM(donation_df, cluster_df))
+        cocm_normalized = normalize(COCM(donation_df, cluster_df, harsh=harsh))
         std_qf_normalized = normalize(standard_qf(donation_df))
         funding = crossfade(cocm_normalized, std_qf_normalized, pct=pct_cocm)
     else:
