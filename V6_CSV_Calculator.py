@@ -10,6 +10,28 @@ import networkx as nx
 
 import fundingutils
 
+ALGORITHM_OPTIONS = [
+    "QF",
+    "COCM",
+    "COCM og",
+    "COCM pct_friends",
+    "half-and-half",
+    "pctCOCM",
+    "pairwise",
+    "donation_profile_clustermatch",
+]
+COCM_BASED_ALGORITHMS = {"COCM", "COCM og", "COCM pct_friends", "half-and-half", "pctCOCM"}
+ALGORITHM_HELPERS = {
+    "QF": "Standard quadratic funding with no cluster-awareness.",
+    "COCM": "Cluster-aware matching using the Markov-style COCM similarity.",
+    "COCM og": "Original COCM variant using the legacy cluster similarity logic.",
+    "COCM pct_friends": "COCM variant based on the fraction of each donor's cluster-friends in each cluster.",
+    "half-and-half": "Even blend of normalized COCM and standard QF outcomes.",
+    "pctCOCM": "Adjustable blend between COCM and standard QF using the COCM blend slider.",
+    "pairwise": "Pairwise matching that rewards breadth across distinct donor pairs.",
+    "donation_profile_clustermatch": "Clusters donors by donation profile, then runs cluster matching.",
+}
+
 
 @dataclass(frozen=True)
 class RoundParams:
@@ -19,7 +41,7 @@ class RoundParams:
     min_donation_threshold_usd: float
     min_passport_score: Optional[float]
     min_model_score: Optional[float]
-    engine: str  # "QF" | "COCM"
+    engine: str  # One of ALGORITHM_OPTIONS
     token_symbol: str
     token_decimals: Optional[int]
     token_price_usd: Optional[float]
@@ -149,17 +171,18 @@ def _compute_matching(
     engine: str,
     matching_pool_usd: float,
     matching_cap_percentage: float,
+    pct_cocm: float = 1.0,
     harsh: bool = True,
 ) -> pd.DataFrame:
     donation_matrix = fundingutils.pivot_votes(donations_df)
-    # Use donation profiles as the "cluster" signal for COCM, consistent with the existing app.
+    # Use donation profiles as the "cluster" signal for cluster-dependent algorithms.
     matching_df = fundingutils.get_qf_matching(
-        "COCM" if engine == "COCM" else "QF",
+        engine,
         donation_matrix,
         matching_cap_percentage,
         matching_pool_usd,
         cluster_df=donation_matrix,
-        pct_cocm=1.0,
+        pct_cocm=float(pct_cocm),
         harsh=harsh,
     )
     # Normalize column naming to "matchedUSD"
@@ -424,12 +447,21 @@ def main() -> None:
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         round_name = st.text_input("Round name", value="Uploaded round")
-        engine = st.radio("Engine", options=["QF", "COCM"], horizontal=True)
+        engine = st.selectbox("Algorithm", options=ALGORITHM_OPTIONS, index=0)
+        pct_cocm = st.slider(
+            "COCM blend for pctCOCM",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.5,
+            step=0.05,
+            disabled=engine != "pctCOCM",
+            help="Only used when algorithm is pctCOCM. 1.0 = pure COCM, 0.0 = pure QF.",
+        )
         harsh = st.toggle(
             "Harsh (COCM)",
             value=True,
-            disabled=engine != "COCM",
-            help="When enabled, COCM uses harsh scaling (`harsh=True`).",
+            disabled=engine not in COCM_BASED_ALGORITHMS,
+            help="Used by COCM-based algorithms (`COCM`, `COCM og`, `COCM pct_friends`, and COCM/QF blends).",
         )
     with c2:
         matching_pool_usd = st.number_input("Matching pool (USD)", min_value=0.0, value=50000.0, step=1000.0)
@@ -463,6 +495,11 @@ def main() -> None:
             min_passport_score = None
         if not _has_mbd_col:
             min_model_score = None
+
+    st.caption(f"Selected algorithm: `{engine}` - {ALGORITHM_HELPERS[engine]}")
+    with st.expander("Algorithm quick guide", expanded=False):
+        for algo in ALGORITHM_OPTIONS:
+            st.markdown(f"- `{algo}`: {ALGORITHM_HELPERS[algo]}")
 
     params = RoundParams(
         round_name=round_name.strip() or "Uploaded round",
@@ -521,6 +558,7 @@ def main() -> None:
             engine=params.engine,
             matching_pool_usd=params.matching_pool_usd,
             matching_cap_percentage=params.matching_cap_percentage,
+            pct_cocm=(float(pct_cocm) if params.engine == "pctCOCM" else 1.0),
             harsh=harsh,
         )
 
