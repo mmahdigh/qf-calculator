@@ -84,12 +84,18 @@ def _filter_donations(
     if min_donation_threshold_usd > 0:
         df = df[df["amountUSD"] >= float(min_donation_threshold_usd)]
 
-    # Filter by Passport Score threshold if the column exists and a threshold is set.
-    if min_passport_score is not None and min_passport_score > 0 and "score" in df.columns:
-        df = df[df["score"].fillna(0) >= float(min_passport_score)]
+    # Score-based filtering: OR logic -- a donation is kept if it passes
+    # EITHER the Passport Score threshold OR the Model Score threshold.
+    passport_active = min_passport_score is not None and min_passport_score > 0 and "score" in df.columns
+    model_active = min_model_score is not None and min_model_score > 0 and "mbdScore" in df.columns
 
-    # Filter by Model Score threshold if the column exists and a threshold is set.
-    if min_model_score is not None and min_model_score > 0 and "mbdScore" in df.columns:
+    if passport_active and model_active:
+        passport_pass = df["score"].fillna(0) >= float(min_passport_score)
+        model_pass = df["mbdScore"].fillna(0) >= float(min_model_score)
+        df = df[passport_pass | model_pass]
+    elif passport_active:
+        df = df[df["score"].fillna(0) >= float(min_passport_score)]
+    elif model_active:
         df = df[df["mbdScore"].fillna(0) >= float(min_model_score)]
 
     # If we have payout addresses, drop self-votes.
