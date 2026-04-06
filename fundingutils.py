@@ -298,10 +298,9 @@ def COCM(donation_df, cluster_df, calcstyle='markov', harsh=True):
     P = (P_prime * P_prime.transpose()).pow(1/2)
 
     # The diagonal entries of P are not relevant, so get rid of them. We only care about the pairwise subsidies between distinct groups.
-    np.fill_diagonal(P.values, 0)
-
-    # Now the sum of every entry in P is the amount of subsidy funding COCM awards to the project.
-    funding[p] += P.sum().sum()
+    # Subtract the trace (sum of diagonal) instead of mutating the array,
+    # because pandas 2.2+ CoW makes .values read-only.
+    funding[p] += P.sum().sum() - np.trace(P.values)
 
 
   return funding
