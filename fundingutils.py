@@ -337,7 +337,7 @@ def apply_voting_eligibility(votes_data, min_donation_threshold, score_at_50_per
 
 
 def pivot_votes(round_votes):
-    pivot_votes = round_votes.pivot_table(index='voter', columns='project_name', values='amountUSD', fill_value=0, aggfunc='sum')
+    pivot_votes = round_votes.pivot_table(index='voter', columns='project_name', values='amountUSD', fill_value=0, aggfunc='mean')
     return pivot_votes
 
 def normalize(funding_dict):
