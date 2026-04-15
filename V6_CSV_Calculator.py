@@ -15,17 +15,19 @@ ALGORITHM_OPTIONS = [
     "COCM",
     "COCM og",
     "COCM pct_friends",
+    "Legacy COCM",
     "half-and-half",
     "pctCOCM",
     "pairwise",
     "donation_profile_clustermatch",
 ]
-COCM_BASED_ALGORITHMS = {"COCM", "COCM og", "COCM pct_friends", "half-and-half", "pctCOCM"}
+COCM_BASED_ALGORITHMS = {"COCM", "COCM og", "COCM pct_friends", "Legacy COCM", "half-and-half", "pctCOCM"}
 ALGORITHM_HELPERS = {
     "QF": "Standard quadratic funding with no cluster-awareness.",
     "COCM": "Cluster-aware matching using the Markov-style COCM similarity.",
     "COCM og": "Original COCM variant using the legacy cluster similarity logic.",
     "COCM pct_friends": "COCM variant based on the fraction of each donor's cluster-friends in each cluster.",
+    "Legacy COCM": "Legacy COCM (fancy=True) with friendship-matrix k_indicators, no harsh mode, and legacy alignment.",
     "half-and-half": "Even blend of normalized COCM and standard QF outcomes.",
     "pctCOCM": "Adjustable blend between COCM and standard QF using the COCM blend slider.",
     "pairwise": "Pairwise matching that rewards breadth across distinct donor pairs.",

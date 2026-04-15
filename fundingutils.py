@@ -306,6 +306,52 @@ def COCM(donation_df, cluster_df, calcstyle='markov', harsh=True):
   return funding
 
 
+def legacy_COCM(donation_df, cluster_df):
+  """Exact replica of the legacy COCM (fancy=True) from legacy/fundingutils.py.
+
+  Differences from the current COCM variants:
+  - Uses the legacy align logic (does not drop zero-sum projects/clusters).
+  - Always uses the friendship-matrix-based k_indicators (no Markov/PJP).
+  - No harsh mode — K always blends between sqrt(c) and c based on k_indicators.
+  - Zeros the diagonal of P via fill_diagonal rather than trace subtraction.
+  """
+  donation_df = donation_df.copy()
+  cluster_df = cluster_df.copy()
+
+  # Legacy align: drop zero-row agents, drop mismatched indices, sort.
+  # Does NOT drop zero-sum project columns or zero-sum cluster columns.
+  cluster_df.drop(cluster_df.index[cluster_df.apply(lambda row: all(row == 0), axis=1)], inplace=True)
+  donation_df.drop(donation_df.index[donation_df.apply(lambda row: all(row == 0), axis=1)], inplace=True)
+  cluster_df.drop(set(cluster_df.index) - set(donation_df.index), inplace=True)
+  donation_df.drop(set(donation_df.index) - set(cluster_df.index), inplace=True)
+  cluster_df.sort_index(inplace=True)
+  donation_df.sort_index(inplace=True)
+
+  projects = donation_df.columns
+  clusters = cluster_df.columns
+  donors = donation_df.index
+
+  normalized_clusters = cluster_df.apply(lambda row: row / row.sum() if any(row) else 0, axis=1)
+  binarized_clusters = binarize(cluster_df)
+
+  friendship_matrix = cluster_df.dot(cluster_df.transpose()).apply(lambda col: col > 0)
+  k_indicators = friendship_matrix.dot(binarized_clusters).apply(lambda row: row / friendship_matrix.loc[row.name].sum(), axis=1)
+  k_indicators = k_indicators.apply(lambda row: np.maximum(row, binarized_clusters.loc[row.name]), axis=1)
+
+  funding = {p: 0 for p in projects}
+
+  for p in projects:
+    C = pd.DataFrame(index=donors, columns=['_'], data=donation_df[p].values).dot(pd.DataFrame(index=['_'], columns=clusters, data=1))
+    K = (k_indicators * C.pow(1/2)) + ((1 - k_indicators) * C)
+    P_prime = K.transpose().dot(normalized_clusters)
+    P = (P_prime * P_prime.transpose()).pow(1/2)
+    p_vals = P.to_numpy(copy=True)
+    np.fill_diagonal(p_vals, 0)
+    funding[p] += p_vals.sum()
+
+  return funding
+
+
 def standard_donation(donation_df):
   # just do a normal vote (nothing quadratic)
   projects = donation_df.columns
@@ -356,6 +402,8 @@ def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cl
         funding = donation_profile_clustermatch(donation_df)
     elif algo == 'pairwise':
         funding = pairwise(donation_df)
+    elif algo == 'Legacy COCM':
+        funding = legacy_COCM(donation_df, cluster_df)
     elif algo == 'COCM': #markov
         funding = COCM(donation_df, cluster_df, harsh=harsh)
     elif algo == 'COCM og':
