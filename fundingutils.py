@@ -398,12 +398,20 @@ def crossfade(dict_1, dict_2, pct=0.5):
 @st.cache_resource(ttl=36000)
 def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df = None, pct_cocm=None, harsh=True):
     projects = donation_df.columns
+    if algo == 'Legacy COCM':
+        funding = legacy_COCM(donation_df, cluster_df)
+        total_money = sum(funding.values())
+        funding_normalized = {p: funding[p]/total_money for p in projects}
+        result = pd.DataFrame(list(funding_normalized.items()), columns=['project_name', 'matching_amount'])
+        if matching_cap_percent < 100.0:
+            result['matching_amount'] = check_matching_cap(result['matching_amount'], matching_cap_percent/100)
+        result['matching_percent'] = result['matching_amount'] * 100
+        result['matching_amount'] = result['matching_amount'] * matching_amount
+        return result
     if algo == 'donation_profile_clustermatch':
         funding = donation_profile_clustermatch(donation_df)
     elif algo == 'pairwise':
         funding = pairwise(donation_df)
-    elif algo == 'Legacy COCM':
-        funding = legacy_COCM(donation_df, cluster_df)
     elif algo == 'COCM': #markov
         funding = COCM(donation_df, cluster_df, harsh=harsh)
     elif algo == 'COCM og':
