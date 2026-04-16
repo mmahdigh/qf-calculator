@@ -73,6 +73,36 @@ def _coerce_numeric_series(s: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
+def _summarize_projects_for_export(donations_df: pd.DataFrame) -> pd.DataFrame:
+    project_cols = ["application_id", "project_id", "project_key", "project_name"]
+    project_totals = (
+        donations_df.groupby(project_cols, as_index=False)
+        .agg(totalReceivedUSD=("amountUSD", "sum"), contributionsCount=("voter", "count"))
+    )
+
+    # Some rounds route the same project to different recipient addresses on different chains.
+    # Pick one canonical payout address so the export stays at one row per project.
+    payout_candidates = (
+        donations_df.assign(
+            recipient_address=donations_df["recipient_address"].fillna("").astype(str).str.strip().str.lower()
+        )
+        .groupby(project_cols + ["recipient_address"], as_index=False)
+        .agg(totalReceivedUSD=("amountUSD", "sum"), contributionsCount=("voter", "count"))
+    )
+    payout_candidates["has_payout_address"] = payout_candidates["recipient_address"].ne("")
+    canonical_payout = (
+        payout_candidates.sort_values(
+            project_cols + ["has_payout_address", "totalReceivedUSD", "contributionsCount", "recipient_address"],
+            ascending=[True, True, True, True, False, False, False, True],
+            kind="stable",
+        )
+        .drop_duplicates(project_cols)
+        [project_cols + ["recipient_address"]]
+    )
+
+    return project_totals.merge(canonical_payout, on=project_cols, how="left")
+
+
 def _filter_donations(
     donations_df: pd.DataFrame,
     *,
@@ -158,6 +188,8 @@ def _build_canonical_donations_df(
         out["project_id"] = out["project_name"]
         out["application_id"] = out["project_name"]
 
+    out["project_key"] = out["project_id"].where(out["project_id"].ne(""), out["project_name"])
+
     # Optional score columns
     if score_col:
         out["score"] = _coerce_numeric_series(raw_df[score_col])
@@ -182,7 +214,13 @@ def _compute_matching(
     pct_cocm: float = 1.0,
     harsh: bool = True,
 ) -> pd.DataFrame:
-    donation_matrix = fundingutils.pivot_votes(donations_df)
+    donation_matrix = donations_df.pivot_table(
+        index="voter",
+        columns="project_key",
+        values="amountUSD",
+        fill_value=0,
+        aggfunc="mean" if engine == "Legacy COCM" else "sum",
+    )
     # Use donation profiles as the "cluster" signal for cluster-dependent algorithms.
     matching_df = fundingutils.get_qf_matching(
         engine,
@@ -193,8 +231,8 @@ def _compute_matching(
         pct_cocm=float(pct_cocm),
         harsh=harsh,
     )
-    # Normalize column naming to "matchedUSD"
-    matching_df = matching_df.rename(columns={"matching_amount": "matchedUSD"})
+    # Normalize column naming to project_key + matchedUSD.
+    matching_df = matching_df.rename(columns={"project_name": "project_key", "matching_amount": "matchedUSD"})
     return matching_df.sort_values("matchedUSD", ascending=False)
 
 
@@ -203,24 +241,18 @@ def _build_results_export(
     matching_df: pd.DataFrame,
     params: RoundParams,
 ) -> pd.DataFrame:
-    agg = (
-        donations_df.groupby(
-            ["application_id", "project_id", "project_name", "recipient_address"], as_index=False
-        )
-        .agg(totalReceivedUSD=("amountUSD", "sum"), contributionsCount=("voter", "count"))
-        .rename(
-            columns={
-                "application_id": "applicationId",
-                "project_id": "projectId",
-                "project_name": "projectName",
-                "recipient_address": "payoutAddress",
-            }
-        )
+    agg = _summarize_projects_for_export(donations_df).rename(
+        columns={
+            "application_id": "applicationId",
+            "project_id": "projectId",
+            "project_name": "projectName",
+            "recipient_address": "payoutAddress",
+        }
     )
     out = pd.merge(
         agg,
-        matching_df[["project_name", "matchedUSD"]].rename(columns={"project_name": "projectName"}),
-        on="projectName",
+        matching_df[["project_key", "matchedUSD"]],
+        on="project_key",
         how="left",
     )
     out["matchedUSD"] = out["matchedUSD"].fillna(0.0).astype(float)
@@ -557,7 +589,7 @@ def main() -> None:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Donations (rows)", f"{len(donations_df):,}")
     c2.metric("Unique donors", f"{donations_df['voter'].nunique():,}")
-    c3.metric("Unique projects", f"{donations_df['project_name'].nunique():,}")
+    c3.metric("Unique projects", f"{donations_df['project_key'].nunique():,}")
     c4.metric("Total donated (USD)", f"${donations_df['amountUSD'].sum():,.2f}")
 
     with st.spinner("Computing matching…"):

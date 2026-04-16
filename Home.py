@@ -409,6 +409,46 @@ def load_data_from_csv(donations_df, rounds_df):
         "matching_available": float(rounds_df['matching_funds_available'].values[0]) if rounds_df['matching_funds_available'].values[0] is not None else 0.0,
     }
 
+
+def summarize_projects_for_export(donations_df):
+    project_cols = ['application_id', 'project_id', 'project_name']
+    project_totals = donations_df.groupby(project_cols, as_index=False).agg({
+        'amountUSD': 'sum',
+        'voter': 'count'
+    }).rename(columns={
+        'amountUSD': 'total_amount_donated_in_usd',
+        'voter': 'total_donations_count'
+    })
+
+    # Collapse projects that have multiple chain-specific recipient addresses down to one row.
+    payout_candidates = (
+        donations_df.assign(
+            recipient_address=donations_df['recipient_address'].fillna('').astype(str).str.strip().str.lower()
+        )
+        .groupby(project_cols + ['recipient_address'], as_index=False)
+        .agg({
+            'amountUSD': 'sum',
+            'voter': 'count'
+        })
+        .rename(columns={
+            'amountUSD': 'total_amount_donated_in_usd',
+            'voter': 'total_donations_count'
+        })
+    )
+    payout_candidates['has_payout_address'] = payout_candidates['recipient_address'].ne('')
+    canonical_payout = (
+        payout_candidates.sort_values(
+            project_cols + ['has_payout_address', 'total_amount_donated_in_usd', 'total_donations_count', 'recipient_address'],
+            ascending=[True, True, True, False, False, False, True],
+            kind='stable'
+        )
+        .drop_duplicates(project_cols)
+        [project_cols + ['recipient_address']]
+    )
+
+    return project_totals.merge(canonical_payout, on=project_cols, how='left')
+
+
 def display_network_graph(df):
     """Display a 3D network graph of voters and grants."""
     st.subheader('🌐 Connection Graph')
@@ -850,17 +890,12 @@ def prepare_output_dataframe(matching_df, strategy_choice, data):
     donations = data['df'].copy()
     donations = donations[~donations['project_name'].isin(data['projects_to_remove'])]
 
-    grouped = donations.groupby(['application_id', 'project_id', 'project_name', 'recipient_address'], as_index=False).agg({
-        'amountUSD': 'sum',
-        'voter': 'count'
-    })
+    grouped = summarize_projects_for_export(donations)
     grouped = grouped.rename(columns={
         'application_id': 'id',
         'project_id': 'project_id',
         'project_name': 'project_name',
         'recipient_address': 'recipient_address',
-        'voter': 'total_donations_count',
-        'amountUSD': 'total_amount_donated_in_usd'
     })
 
     # CUSTOM RULE: Remove application ID 90 from round 608, duplicate project

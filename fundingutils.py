@@ -28,7 +28,7 @@ def add(x,y):
 
 # first, some helper functions
 def binarize(df):
-  return df.map(lambda x: 1 if x > 0 else 0)
+  return (df > 0).astype(int)
 
 def align(donation_df, cluster_df):
 

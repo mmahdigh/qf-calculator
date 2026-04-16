@@ -9,3 +9,6 @@ data/checking_passport.ipynb
 .DS_Store
 .vscode
 .venv
+*.csv
+*.docx
+/legacy
