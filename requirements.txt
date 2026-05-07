@@ -4,5 +4,6 @@ plotly>=6.0.0
 # Python 3.13 compatible (avoid source builds on Streamlit Cloud)
 numpy>=2.0.0
 pandas>=2.2.0
+scipy>=1.15.0
 
 networkx>=3.0
