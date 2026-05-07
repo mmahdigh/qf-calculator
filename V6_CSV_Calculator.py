@@ -337,6 +337,28 @@ def _chart_donor_amount_distribution(donations_df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def _sample_connection_edges(grouped: pd.DataFrame, *, max_edges: int, seed: int) -> pd.DataFrame:
+    """Keep prominent connections while preserving graph diversity without weighted sampling."""
+    max_edges = max(1, int(max_edges))
+    if len(grouped) <= max_edges:
+        return grouped
+
+    top_count = min(len(grouped), max(1, int(max_edges * 0.25)))
+    random_count = max_edges - top_count
+
+    top_edges = grouped.sort_values("amountUSD", ascending=False, kind="stable").head(top_count)
+    remaining = grouped.drop(index=top_edges.index)
+    if random_count <= 0 or remaining.empty:
+        return top_edges.reset_index(drop=True)
+
+    random_edges = remaining.sample(
+        n=min(random_count, len(remaining)),
+        random_state=seed,
+        replace=False,
+    )
+    return pd.concat([top_edges, random_edges], ignore_index=True)
+
+
 def _chart_connection_graph(
     donations_df: pd.DataFrame,
     *,
@@ -358,14 +380,7 @@ def _chart_connection_graph(
     keep_donors = set(donor_totals.sort_values("totalUSD", ascending=False).head(int(max_donors))["voter"])
     grouped = grouped[grouped["voter"].isin(keep_donors)]
 
-    # Sample edges (weighted by donation size)
-    if len(grouped) > int(max_edges):
-        weights = grouped["amountUSD"].clip(lower=0).to_numpy()
-        if weights.sum() > 0:
-            probs = weights / weights.sum()
-            grouped = grouped.sample(n=int(max_edges), random_state=seed, replace=False, weights=probs)
-        else:
-            grouped = grouped.sample(n=int(max_edges), random_state=seed, replace=False)
+    grouped = _sample_connection_edges(grouped, max_edges=max_edges, seed=seed)
 
     donors = grouped["voter"].unique().tolist()
     projects = grouped["project_name"].unique().tolist()
@@ -612,18 +627,6 @@ def main() -> None:
     with v2:
         st.plotly_chart(_chart_top_projects(results_df, top_n=30), use_container_width=True)
 
-    with st.expander("Connection graph (sampled)", expanded=False):
-        st.caption("This is a sampled donor↔project graph to help spot clusters/coordination patterns without freezing.")
-        c1, c2 = st.columns(2)
-        with c1:
-            max_edges = st.slider("Max edges", min_value=200, max_value=3000, value=1500, step=100)
-        with c2:
-            max_donors = st.slider("Max donors", min_value=100, max_value=2000, value=800, step=50)
-        st.plotly_chart(
-            _chart_connection_graph(donations_df, max_edges=int(max_edges), max_donors=int(max_donors)),
-            use_container_width=True,
-        )
-
     st.subheader("Results table")
     st.dataframe(
         results_df,
@@ -642,6 +645,24 @@ def main() -> None:
         file_name="v6_matching_results.csv",
         mime="text/csv",
     )
+
+    with st.expander("Connection graph (sampled)", expanded=False):
+        st.caption("This is a sampled donor↔project graph to help spot clusters/coordination patterns without freezing.")
+        c1, c2 = st.columns(2)
+        with c1:
+            max_edges = st.slider("Max edges", min_value=200, max_value=3000, value=1500, step=100)
+        with c2:
+            max_donors = st.slider("Max donors", min_value=100, max_value=2000, value=800, step=50)
+        try:
+            connection_fig = _chart_connection_graph(
+                donations_df,
+                max_edges=int(max_edges),
+                max_donors=int(max_donors),
+            )
+        except Exception as e:
+            st.warning(f"Connection graph could not be rendered: {e}")
+        else:
+            st.plotly_chart(connection_fig, use_container_width=True)
 
     st.caption("No writes are made back to v6. This tool only reads your CSV and computes results in-browser.")
 
