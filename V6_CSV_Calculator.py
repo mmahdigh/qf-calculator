@@ -33,53 +33,108 @@ ALGORITHM_HELPERS = {
     "pairwise": "Pairwise matching that rewards breadth across distinct donor pairs.",
     "donation_profile_clustermatch": "Clusters donors by donation profile, then runs cluster matching.",
 }
+# Sentence fragments designed to slot in after "it ..." or "`<algo>` ...".
+# `math` describes the formula; `real_world` describes the intent.
+# Note: in this calculator, COCM-family algorithms are wired with `cluster_df = donation_matrix`,
+# so a "cluster" is just "the set of donors who supported a given project" -- we use "project" in
+# user-facing copy where the two are interchangeable.
 ALGORITHM_COMPARE_DETAILS = {
     "QF": {
-        "math": "computes `(sum_i sqrt(c_i,p))^2 - sum_i c_i,p` independently for each project, with no cluster or donor-similarity term",
+        "math": "computes `(sum_i sqrt(c_i,p))^2 - sum_i c_i,p` independently for each project, with no donor-similarity term",
         "real_world": "treats every donor as an independent voice, so many separate small donors create a strong matching signal",
     },
     "COCM": {
-        "math": "uses Markov-style donor-to-cluster propagation to create soft `k(i,g)` values, scales contributions through `K`, and only counts reciprocal off-diagonal cluster-pair signal",
-        "real_world": "lets support flow through related communities while discounting support that mostly stays inside one tightly connected community",
+        "math": "produces *soft* `k(i,g)` closeness values via Markov-style propagation over the donor/project graph, then matches contributions using `K` (harsh by default)",
+        "real_world": "lets a donation send a partial signal through co-donors and shared projects, while discounting donations that mostly stay inside one tightly overlapping community",
     },
     "COCM og": {
-        "math": "builds a weighted friendship matrix, maps it to cluster reachability, and turns that reachability into boolean `k(i,g)` values",
-        "real_world": "treats a reachable cluster as close in a yes/no way, so near and distant reachable relationships can collapse into the same signal",
+        "math": "produces *boolean* `k(i,g)` values by thresholding weighted co-support reachability at zero",
+        "real_world": "treats any reachable project as 'close' in a yes/no way, collapsing near and distant relationships into the same signal",
     },
     "COCM pct_friends": {
-        "math": "uses a boolean friend graph and sets `k(i,g)` to the fraction of a donor's friends in cluster `g`, maxed with direct cluster membership",
-        "real_world": "asks how much of a donor's immediate neighborhood is tied to each project cluster, without propagating through longer paths",
+        "math": "produces *fractional* `k(i,g)` values equal to the share of a donor's co-supporters that backed project `g`, with `k(i,g) = 1` when the donor backed `g` themselves",
+        "real_world": "asks how concentrated a donor's immediate co-supporter network is around each project, without propagating through longer paths",
     },
     "Legacy COCM": {
-        "math": "uses the old pct-friends-style indicators, legacy alignment, and the non-harsh/fancy `K = k * sqrt(c) + (1 - k) * c` formula",
-        "real_world": "best preserves old calculator behavior and applies a gentler coordination discount than current harsh COCM",
+        "math": "uses the old pct-friends-style indicators with legacy alignment and always applies the non-harsh formula `K = k * sqrt(c) + (1 - k) * c`",
+        "real_world": "best preserves the old calculator's behavior and applies a gentler coordination discount than current harsh COCM",
     },
     "half-and-half": {
-        "math": "averages normalized Markov COCM output with normalized QF output at a fixed 50/50 split",
-        "real_world": "keeps half of QF's broad-donor reward while adding half of COCM's coordination resistance",
+        "math": "averages normalized COCM (Markov) output with normalized QF output at a fixed 50/50 split",
+        "real_world": "keeps half of QF's broad-donor reward and adds half of COCM's coordination resistance",
     },
     "pctCOCM": {
-        "math": "mixes normalized COCM and normalized QF as `pct_cocm * COCM + (1 - pct_cocm) * QF`",
-        "real_world": "lets you dial how much the round should behave like coordination-resistant COCM versus classic QF",
+        "math": "blends normalized COCM and normalized QF as `pct_cocm * COCM + (1 - pct_cocm) * QF`",
+        "real_world": "lets you dial how much the round behaves like coordination-resistant COCM versus classic QF",
     },
     "pairwise": {
-        "math": "adds donor-pair terms `sqrt(c_i,p) * sqrt(c_j,p) * M / (M + dot(sqrt(profile_i), sqrt(profile_j)))` for pairs that both supported a project",
-        "real_world": "rewards common support from donors with different overall giving histories and discounts pairs that look too similar",
+        "math": "adds donor-pair terms `sqrt(c_i,p) * sqrt(c_j,p) * M / (M + dot(sqrt(profile_i), sqrt(profile_j)))` over donors who both supported the project",
+        "real_world": "rewards co-support from donors with very different overall giving histories and discounts pairs whose donation patterns look too similar",
     },
     "donation_profile_clustermatch": {
-        "math": "binarizes donor project choices, groups identical support profiles, aggregates each group, then runs cluster matching over those grouped donations",
-        "real_world": "treats many wallets with the exact same project set more like one clustered voice than many independent voices",
+        "math": "groups donors who supported exactly the same set of projects, then pools their donations under a single square root per group",
+        "real_world": "treats many wallets that backed the exact same set of projects more like one shared voice than many independent voices",
     },
 }
+
+# Curated notes for pairs where the templated fallback doesn't tell the real story.
+# Format: two short paragraphs, each led by a bold marker, so they render consistently
+# with the same-algo and fallback branches in `_build_algorithm_comparison`.
 PAIR_COMPARISON_NOTES = {
+    frozenset(("QF", "COCM")): (
+        "**Mathematically:** `QF` rewards each project's donations independently as `(sum sqrt(c))^2 - sum c`, with every donor counted on their own. "
+        "`COCM` first measures, for each (donor, project) pair, how socially aligned the donor is with that project's existing supporters (soft `k(i,g)` values from Markov-style propagation), "
+        "then uses harsh `K = (1 - k) * c` to discount donations from already-aligned donors and reward donations from donors who bridge otherwise-disconnected projects.\n\n"
+        "**In real-world terms:** Under QF, the same dollar from any small donor counts the same -- many independent small donors create a strong matching signal. "
+        "Under COCM, a dollar from a donor whose donation pattern overlaps heavily with a project's existing supporters is discounted, while a dollar from someone who bridges otherwise-disconnected projects counts more strongly."
+    ),
+    frozenset(("COCM", "Legacy COCM")): (
+        "**Mathematically:** Current `COCM` uses Markov-style propagation for `k(i,g)` and, when harsh is on, applies `K = (1 - k) * c` so a donor fully aligned with a project's community contributes 0 toward that project. "
+        "`Legacy COCM` uses the older pct-friends-style indicators and always applies the non-harsh formula `K = k * sqrt(c) + (1 - k) * c`, regardless of the harsh toggle.\n\n"
+        "**In real-world terms:** Current COCM reflects today's coordination-resistance philosophy: donations from tightly overlapping communities are heavily discounted. "
+        "Legacy COCM is gentler -- even fully-aligned donors still contribute something -- and is mainly useful for reproducing the old calculator's results."
+    ),
     frozenset(("COCM", "COCM og")): (
-        "Mathematically, `COCM` uses Markov-style propagation to produce soft `k(i,g)` values, so closeness can decay across paths in the donor/project graph; `COCM og` converts weighted friendship reachability into boolean `k(i,g)` values, so a cluster is either reachable or not. In real-world terms, Markov style means your donation can send a weaker propagated signal to friends-of-friends or more distant related communities, while the boolean version treats reachable distant friends more like a yes/no connection and loses the nuance of how far or weak that relationship was."
+        "**Mathematically:** `COCM` uses Markov-style propagation to produce *soft* `k(i,g)` values that decay across paths in the donor/project graph. "
+        "`COCM og` thresholds weighted co-support reachability at zero, producing *boolean* `k(i,g)` values -- a project is either reachable or it isn't.\n\n"
+        "**In real-world terms:** Markov style means your donation can send a weaker propagated signal to friends-of-friends and more distantly related projects. "
+        "The boolean version treats any reachable connection as a flat yes/no link, so near and distant relationships collapse into the same signal."
     ),
     frozenset(("COCM", "COCM pct_friends")): (
-        "Mathematically, `COCM` uses Markov-style propagation over the donor/project graph, while `COCM pct_friends` only measures the share of a donor's immediate friends that belong to each cluster. In real-world terms, Markov style allows a diluted signal to travel through indirect relationships, while pct_friends focuses on the donor's local neighborhood and asks what fraction of nearby supporters are connected to the project cluster."
+        "**Mathematically:** `COCM` uses Markov-style propagation over the full donor/project graph, so `k(i,g)` can pick up indirect (multi-hop) relationships. "
+        "`COCM pct_friends` only measures the fraction of a donor's *immediate* co-supporters that backed each project.\n\n"
+        "**In real-world terms:** Markov style lets a diluted signal travel through friends-of-friends. "
+        "`pct_friends` ignores those longer paths and just asks: of the donors I co-donated with, what share also backed this project?"
     ),
     frozenset(("COCM og", "COCM pct_friends")): (
-        "Mathematically, `COCM og` turns any reachable cluster connection into a boolean close/not-close indicator, while `COCM pct_friends` keeps a fractional value based on how many immediate friends are in the cluster. In real-world terms, og asks whether there is any connection at all, while pct_friends asks how concentrated that donor's nearby community is around the project."
+        "**Mathematically:** `COCM og` collapses any reachable connection into a boolean close/not-close indicator. "
+        "`COCM pct_friends` keeps a fractional value based on how many of the donor's immediate co-supporters backed the project.\n\n"
+        "**In real-world terms:** `og` asks 'is there any connection at all?'. "
+        "`pct_friends` asks 'how concentrated is this donor's nearby community around this project?'."
+    ),
+    frozenset(("COCM", "half-and-half")): (
+        "**Mathematically:** `COCM` is pure coordination-resistant matching. "
+        "`half-and-half` averages normalized COCM with normalized QF at a fixed 50/50 split.\n\n"
+        "**In real-world terms:** Pure COCM aggressively discounts donations from tightly overlapping communities. "
+        "`half-and-half` softens that by keeping half of QF's broad-donor reward, so projects with many independent small donors aren't penalized as harshly."
+    ),
+    frozenset(("half-and-half", "pctCOCM")): (
+        "**Mathematically:** Both blend normalized COCM and normalized QF. "
+        "`half-and-half` is hard-coded to 50/50; `pctCOCM` exposes the COCM share as a slider (`pct_cocm`).\n\n"
+        "**In real-world terms:** `half-and-half` is the no-knob version. "
+        "`pctCOCM` is the same idea with a dial -- push toward 1.0 for stronger coordination resistance, push toward 0.0 for behavior closer to plain QF."
+    ),
+    frozenset(("QF", "pairwise")): (
+        "**Mathematically:** `QF` matches each project on `(sum sqrt(c))^2 - sum c`, summing over donors independently. "
+        "`pairwise` instead sums donor-pair terms `sqrt(c_i) * sqrt(c_j) * M / (M + dot(sqrt(profile_i), sqrt(profile_j)))` across donors who both supported the project, so pairs whose donation patterns look similar are heavily discounted.\n\n"
+        "**In real-world terms:** QF rewards any pair of small donors equally. "
+        "`pairwise` asks 'how diverse are the donor pairs supporting this project?' -- two donors with very different giving histories count for more than two donors who always show up together."
+    ),
+    frozenset(("QF", "donation_profile_clustermatch")): (
+        "**Mathematically:** `QF` puts every donor under their own square root. "
+        "`donation_profile_clustermatch` first groups donors who backed exactly the same set of projects, then pools each group's donations under a single square root.\n\n"
+        "**In real-world terms:** Under QF, ten wallets that all donated only to the same two projects each get full QF credit. "
+        "Under `donation_profile_clustermatch`, those ten wallets are treated as one shared voice -- useful for blunting suspected sybil clusters that share an identical donation profile."
     ),
 }
 
@@ -88,8 +143,9 @@ def _build_algorithm_comparison(left_algo: str, right_algo: str) -> str:
     if left_algo == right_algo:
         detail = ALGORITHM_COMPARE_DETAILS[left_algo]
         return (
-            f"`{left_algo}` is selected on both sides. Mathematically, it {detail['math']}. "
-            f"In real-world terms, it {detail['real_world']}."
+            f"`{left_algo}` is selected on both sides.\n\n"
+            f"**Mathematically:** it {detail['math']}.\n\n"
+            f"**In real-world terms:** it {detail['real_world']}."
         )
 
     pair_note = PAIR_COMPARISON_NOTES.get(frozenset((left_algo, right_algo)))
@@ -99,8 +155,9 @@ def _build_algorithm_comparison(left_algo: str, right_algo: str) -> str:
     left_detail = ALGORITHM_COMPARE_DETAILS[left_algo]
     right_detail = ALGORITHM_COMPARE_DETAILS[right_algo]
     return (
-        f"Mathematically, `{left_algo}` {left_detail['math']}, while `{right_algo}` "
-        f"{right_detail['math']}. In real-world terms, `{left_algo}` {left_detail['real_world']}; "
+        f"**Mathematically:** `{left_algo}` {left_detail['math']}. "
+        f"`{right_algo}` {right_detail['math']}.\n\n"
+        f"**In real-world terms:** `{left_algo}` {left_detail['real_world']}. "
         f"`{right_algo}` {right_detail['real_world']}."
     )
 
@@ -587,11 +644,14 @@ def main() -> None:
             value=True,
             disabled=engine not in HARSH_SUPPORTED_ALGORITHMS,
             help=(
-                "Used by current COCM variants and COCM/QF blends. When on, closeness to a project cluster "
-                "becomes a penalty: `K = (1 - k) * c`, so a donor fully inside that cluster contributes 0 "
-                "in that cluster direction and partial closeness discounts the contribution. This shifts matching "
-                "away from tightly overlapping communities and toward projects backed by donors who bridge distinct "
-                "communities. Legacy COCM always uses the older non-harsh formula."
+                "Used by current COCM variants (`COCM`, `COCM og`, `COCM pct_friends`) and COCM/QF blends "
+                "(`half-and-half`, `pctCOCM`). When on, alignment with a project's existing supporters works "
+                "*against* a donation: `K = (1 - k) * c`. A donor whose social signal is fully aligned with a "
+                "project's supporters contributes 0 toward that project; partial alignment produces a partial "
+                "discount. This shifts matching away from tightly overlapping communities and toward projects "
+                "backed by donors who bridge otherwise-disconnected groups. When off, the gentler non-harsh "
+                "formula `K = k * sqrt(c) + (1 - k) * c` is used instead. Legacy COCM ignores this toggle and "
+                "always uses the non-harsh formula."
             ),
         )
     with c2:
@@ -631,7 +691,13 @@ def main() -> None:
     with st.expander("Algorithm quick guide", expanded=False):
         for algo in ALGORITHM_OPTIONS:
             st.markdown(f"- `{algo}`: {ALGORITHM_HELPERS[algo]}")
-        st.markdown("#### Compare")
+        st.markdown("---")
+        st.markdown("**Compare two algorithms**")
+        st.caption(
+            "Pick any two to see how they differ, both in formula and in what they actually reward. "
+            "For COCM-family algorithms in this calculator, the donation matrix itself is used as the "
+            "social signal, so 'cluster' and 'project' end up referring to the same thing."
+        )
         compare_col_1, compare_col_2 = st.columns(2)
         with compare_col_1:
             compare_left = st.selectbox(
