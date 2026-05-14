@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QF Calculator Algorithm Comparison</title>
+  <style>
+    :root {
+      --bg: #f7f5ef;
+      --paper: #fffdf8;
+      --ink: #211f1a;
+      --muted: #6b665c;
+      --line: #ded7c8;
+      --line-strong: #c5baa5;
+      --accent: #3b6f5c;
+      --accent-soft: #e6f0eb;
+      --warn: #7a4f16;
+      --warn-soft: #f7ead7;
+      --code: #f1ece1;
+      --good: #1f6b44;
+      --bad: #8a3324;
+      --shadowless: transparent;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    header {
+      border-bottom: 2px solid var(--line-strong);
+      padding-bottom: 22px;
+      margin-bottom: 26px;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 34px;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-top: 34px;
+      padding-top: 4px;
+    }
+
+    h3 {
+      font-size: 18px;
+      margin-top: 22px;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .subtitle {
+      max-width: 880px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: var(--paper);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
+      margin: 22px 0;
+      padding: 16px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .toc a {
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }
+
+    .toc a:hover {
+      border-bottom-color: var(--accent);
+    }
+
+    .callout {
+      background: var(--accent-soft);
+      border: 1px solid #bad3c7;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin: 18px 0;
+    }
+
+    .warning {
+      background: var(--warn-soft);
+      border-color: #dfc28f;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .formula {
+      overflow-x: auto;
+      background: #27231c;
+      color: #fff8e7;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eee7d8;
+      font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: #fbf7ef;
+    }
+
+    .tight td, .tight th {
+      padding: 7px 8px;
+      font-size: 13px;
+    }
+
+    .yes {
+      color: var(--good);
+      font-weight: 700;
+    }
+
+    .no {
+      color: var(--bad);
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .section-note {
+      color: var(--muted);
+      max-width: 920px;
+    }
+
+    ul {
+      margin: 8px 0 14px 21px;
+      padding: 0;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 820px) {
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 29px;
+      }
+    }
+
+    .footer {
+      margin-top: 42px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line-strong);
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>QF Calculator Algorithm Comparison</h1>
+      <p class="subtitle">
+        A code-level and real-world comparison of the matching algorithms exposed by this repo:
+        QF, COCM, COCM og, COCM pct_friends, Legacy COCM, half-and-half, pctCOCM,
+        pairwise, donation_profile_clustermatch, and the older Home.py TQF paths.
+      </p>
+      <div class="meta">
+        <span class="pill">Primary source: <code>fundingutils.py</code></span>
+        <span class="pill">CSV UI: <code>V6_CSV_Calculator.py</code></span>
+        <span class="pill">Legacy UI: <code>Home.py</code></span>
+        <span class="pill">Trace: <code>cocm_full_trace/</code></span>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <a href="#executive-summary">Executive Summary</a>
+      <a href="#common-pipeline">Common Pipeline</a>
+      <a href="#algorithms">Algorithm Catalog</a>
+      <a href="#harsh">Harsh=True</a>
+      <a href="#fancy">Fancy=True</a>
+      <a href="#qf-vs-cocm">QF vs COCM</a>
+      <a href="#legacy-vs-og">Legacy COCM vs COCM og</a>
+      <a href="#settings">Settings and Combinations</a>
+      <a href="#pairwise-differences">Pair-by-Pair Differences</a>
+      <a href="#edge-cases">Important Edge Cases</a>
+    </nav>
+
+    <section id="executive-summary">
+      <h2>Executive Summary</h2>
+      <div class="callout">
+        <p>
+          The biggest distinction is independence. <strong>QF</strong> treats each donor as an independent signal.
+          <strong>COCM</strong> tries to measure whether donors are connected through shared project affinities
+          and only rewards cross-cluster signal. In this repo's UI, the cluster signal is usually the donation
+          matrix itself, so projects double as clusters.
+        </p>
+        <p>
+          <strong>Harsh=True</strong> is the default for current COCM. It changes COCM from "soften close-cluster
+          contributions toward square-root treatment" into "remove close-cluster contribution from that cluster
+          direction." In code, it replaces <code>K = k * sqrt(c) + (1 - k) * c</code> with
+          <code>K = (1 - k) * c</code>.
+        </p>
+        <p>
+          <strong>Fancy=True</strong> is not a current UI toggle. In this repo it is a historical name for the
+          non-harsh/legacy COCM scaling formula: <code>K = k * sqrt(c) + (1 - k) * c</code>. The closest current
+          setting is <code>harsh=False</code>, while <code>Legacy COCM</code> is documented as the old
+          <code>fancy=True</code> replica.
+        </p>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th>Short answer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>What is QF?</td>
+            <td>Quadratic funding over individual donors: many independent small donors can beat one large donor.</td>
+          </tr>
+          <tr>
+            <td>What is COCM?</td>
+            <td>Cluster-aware matching: it rewards support that crosses distinct donor/project affinity clusters and discounts coordinated or tightly connected support.</td>
+          </tr>
+          <tr>
+            <td>What is COCM og?</td>
+            <td>A current COCM variant using a broad boolean "connected to this cluster" indicator from a weighted friendship matrix.</td>
+          </tr>
+          <tr>
+            <td>What is Legacy COCM?</td>
+            <td>A replica of the older/original COCM implementation: pct-friends style indicators, fancy/non-harsh scaling, legacy alignment, and no harsh mode.</td>
+          </tr>
+          <tr>
+            <td>Which algorithms does <code>harsh</code> affect?</td>
+            <td><code>COCM</code>, <code>COCM og</code>, <code>COCM pct_friends</code>, plus the COCM leg of <code>half-and-half</code> and <code>pctCOCM</code>. It does not affect QF, pairwise, donation_profile_clustermatch, or Legacy COCM.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="common-pipeline">
+      <h2>Common Pipeline</h2>
+      <p class="section-note">
+        Most algorithms return a raw matching signal per project. <code>get_qf_matching()</code> then reserves any
+        configured minimum matching floor, normalizes the residual algorithmic signal, caps, and scales that
+        signal into matching dollars.
+      </p>
+
+      <div class="formula">raw_signal_by_project
+-> reserve min_matching_floor * project_count from matching_pool
+-> normalize raw signal over the residual pool
+-> add min_matching_floor to each project
+-> apply matching cap with iterative redistribution
+-> matching_percent = capped_share * 100
+-> matching_amount = capped_share * matching_pool</div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Raw signal is not direct donations</h3>
+          <p>Functions such as <code>standard_qf()</code> and <code>COCM()</code> return the match-only signal. The comment in <code>fundingutils.py</code> says direct donations must be added separately if total project funding is needed.</p>
+        </div>
+        <div class="card">
+          <h3>The cap is shared by all algorithms</h3>
+          <p><code>check_matching_cap()</code> clips projects above the cap and redistributes excess proportionally to projects below the cap until no project is over cap. The cap is applied after any minimum floor has been added.</p>
+        </div>
+        <div class="card">
+          <h3>Minimum matching floor</h3>
+          <p><code>min_matching_floor</code> is a per-project dollar lower bound. If the requested floor does not fit in the pool, the effective floor is scaled down evenly. If the floor is above the per-project cap, the cap wins and total distributed matching can be below the full pool.</p>
+        </div>
+        <div class="card">
+          <h3>Cluster input in the UI</h3>
+          <p>The CSV calculator passes <code>cluster_df=donation_matrix</code>. That means a donor's project donation profile is also treated as the donor's cluster membership profile.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="algorithms">
+      <h2>Algorithm Catalog</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Algorithm name</th>
+            <th>Function/path</th>
+            <th>Core calculation</th>
+            <th>Real-world behavior</th>
+            <th>Uses clusters?</th>
+            <th>Uses <code>harsh</code>?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>QF</code></td>
+            <td><code>standard_qf()</code> via fallback in <code>get_qf_matching()</code></td>
+            <td><code>(sum_i sqrt(c_i,p))^2 - sum_i c_i,p</code></td>
+            <td>Rewards breadth of individual support. It assumes donors are independent.</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td><code>COCM</code></td>
+            <td><code>COCM(calcstyle="markov")</code></td>
+            <td>Builds Markov-style donor/project/cluster proximity, computes cross-cluster pair signal, drops diagonal.</td>
+            <td>Rewards projects whose donors connect distinct communities rather than one tight cluster.</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+          </tr>
+          <tr>
+            <td><code>COCM og</code></td>
+            <td><code>COCM(calcstyle="og")</code></td>
+            <td>Uses a weighted friendship matrix and boolean reachability to clusters for <code>k_indicators</code>.</td>
+            <td>Broadly marks a donor as close to any cluster reachable through co-donation relationships.</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+          </tr>
+          <tr>
+            <td><code>COCM pct_friends</code></td>
+            <td><code>COCM(calcstyle="pct_friends")</code></td>
+            <td>Uses boolean friend relationships and sets <code>k(i,g)</code> to the fraction of donor <code>i</code>'s friends in cluster <code>g</code>, maxed with direct membership.</td>
+            <td>Interpretable local-neighborhood COCM: "how many of this donor's neighbors are in this project cluster?"</td>
+            <td class="yes">Yes</td>
+            <td class="yes">Yes</td>
+          </tr>
+          <tr>
+            <td><code>Legacy COCM</code></td>
+            <td><code>legacy_COCM()</code></td>
+            <td>Legacy pct-friends indicators, always non-harsh/fancy scaling, legacy align behavior.</td>
+            <td>Best replica of the old/original COCM output, not the same as current <code>COCM og</code>.</td>
+            <td class="yes">Yes</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td><code>half-and-half</code></td>
+            <td><code>normalize(COCM) + normalize(QF)</code> through <code>crossfade()</code></td>
+            <td>50% normalized Markov COCM and 50% normalized QF.</td>
+            <td>A compromise: keeps QF's broad donor reward while adding COCM's coordination discount.</td>
+            <td class="yes">Partial</td>
+            <td class="yes">Only COCM half</td>
+          </tr>
+          <tr>
+            <td><code>pctCOCM</code></td>
+            <td><code>crossfade(COCM, QF, pct=pct_cocm)</code></td>
+            <td><code>pct_cocm * COCM_share + (1 - pct_cocm) * QF_share</code>.</td>
+            <td>Dial from pure QF at 0 to pure COCM at 1.</td>
+            <td class="yes">Partial</td>
+            <td class="yes">Only COCM leg</td>
+          </tr>
+          <tr>
+            <td><code>pairwise</code></td>
+            <td><code>pairwise(M=0.01)</code></td>
+            <td>For each donor pair that both gave to a project, adds <code>sqrt(c_i,p) * sqrt(c_j,p) * k_i,j</code>, where <code>k_i,j = M / (M + dot(sqrt(profile_i), sqrt(profile_j)))</code>.</td>
+            <td>Rewards common support from donors with dissimilar overall donation profiles; similar donors get a smaller coefficient.</td>
+            <td class="no">No explicit clusters</td>
+            <td class="no">No</td>
+          </tr>
+          <tr>
+            <td><code>donation_profile_clustermatch</code></td>
+            <td><code>donation_profile_clustermatch()</code> -> <code>clustermatch()</code></td>
+            <td>Creates a binary donation-profile cluster, pools donors with the same project set, then runs QF over clusters.</td>
+            <td>Many donors with identical support patterns are treated more like one cluster than many independent people.</td>
+            <td class="yes">Derived clusters</td>
+            <td class="no">No</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Internal or legacy-app-only paths</h3>
+      <table class="tight">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Where it appears</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>TQF</code></td>
+            <td><code>Home.py</code> through <code>tunable_qf(..., algo="TQF")</code></td>
+            <td>Because <code>"TQF"</code> is not an explicit branch in <code>get_qf_matching()</code>, it falls back to standard QF after scaling each voter's donation row by a supplied <code>scale_factor</code>.</td>
+          </tr>
+          <tr>
+            <td><code>TQF_COCM</code></td>
+            <td><code>Home.py</code> display/export path</td>
+            <td>Runs the selected COCM/pctCOCM strategy after token or arbitrary donor scaling. In the current implementation, <code>tunable_qf()</code> mutates the matrix it receives, so repeated calls can compound scaling.</td>
+          </tr>
+          <tr>
+            <td><code>standard_donation</code></td>
+            <td>Defined but not selected by <code>get_qf_matching()</code></td>
+            <td>Linear matching signal equal to direct donations. It is not exposed in the current algorithm selectors.</td>
+          </tr>
+          <tr>
+            <td><code>cluster_profile_pairwise</code></td>
+            <td>Defined but not selected by <code>get_qf_matching()</code></td>
+            <td>Pairwise matching with a coefficient based on how different two donors' cluster memberships are.</td>
+          </tr>
+          <tr>
+            <td><code>clustermatch</code></td>
+            <td>Helper used by <code>donation_profile_clustermatch()</code></td>
+            <td>Aggregates donations into cluster buckets, then applies QF to cluster totals instead of donor totals.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="harsh">
+      <h2>What Harsh=True Means</h2>
+      <p>
+        In current COCM, <code>harsh</code> only changes the <code>K</code> matrix, which is the per-donor,
+        per-cluster scaled contribution used for a target project.
+      </p>
+
+      <div class="two-col">
+        <div class="card">
+          <h3><code>harsh=False</code></h3>
+          <div class="formula">K(i,g) = k(i,g) * sqrt(c_i) + (1 - k(i,g)) * c_i</div>
+          <p>
+            A donor close to cluster <code>g</code> is moved toward square-root treatment. A donor far from
+            cluster <code>g</code> stays closer to linear contribution. This is the gentler, legacy/fancy-style
+            behavior.
+          </p>
+        </div>
+        <div class="card">
+          <h3><code>harsh=True</code></h3>
+          <div class="formula">K(i,g) = (1 - k(i,g)) * c_i</div>
+          <p>
+            A donor fully close to cluster <code>g</code> contributes zero in that cluster direction. A donor
+            unrelated to <code>g</code> contributes the full linear amount. Partial closeness creates a proportional
+            discount.
+          </p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th><code>k(i,g)</code></th>
+            <th><code>harsh=False</code></th>
+            <th><code>harsh=True</code></th>
+            <th>Interpretation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Donor is directly in the cluster</td>
+            <td>1</td>
+            <td><code>sqrt(c_i)</code></td>
+            <td><code>0</code></td>
+            <td>Harsh mode removes same-cluster signal instead of softening it.</td>
+          </tr>
+          <tr>
+            <td>Donor is partly close to the cluster</td>
+            <td>Between 0 and 1</td>
+            <td>Blend between <code>c_i</code> and <code>sqrt(c_i)</code></td>
+            <td>Proportional discount of <code>c_i</code></td>
+            <td>Harsh mode treats proximity as a penalty.</td>
+          </tr>
+          <tr>
+            <td>Donor is unrelated to the cluster</td>
+            <td>0</td>
+            <td><code>c_i</code></td>
+            <td><code>c_i</code></td>
+            <td>Both modes preserve far-cluster signal.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <p>
+          Real-world meaning: <strong>Harsh=True asks for independence more aggressively.</strong> It says that
+          support from the same or nearby cluster should not create matching signal in that cluster direction.
+          Projects backed by tight, highly overlapping communities tend to lose relative share; projects backed
+          by donors whose profiles bridge distinct communities tend to gain relative share.
+        </p>
+        <p>
+          Because final results are normalized to the matching pool, harsh mode usually changes relative allocation,
+          not the total amount distributed.
+        </p>
+      </div>
+    </section>
+
+    <section id="fancy">
+      <h2>What Fancy=True Means</h2>
+      <p>
+        <code>Fancy</code> is a historical COCM setting, not a live parameter in the current UI. The repo still
+        refers to it in comments and in <code>legacy_COCM()</code>, whose docstring says it is an exact replica
+        of legacy COCM with <code>fancy=True</code>.
+      </p>
+
+      <div class="formula">Fancy/non-harsh scaling:
+K(i,g) = k(i,g) * sqrt(c_i) + (1 - k(i,g)) * c_i</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Concept</th>
+            <th>Current-code equivalent</th>
+            <th>Meaning</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Fancy=True</code></td>
+            <td><code>harsh=False</code> for the <code>K</code> formula; always on inside <code>Legacy COCM</code></td>
+            <td>Use <code>k</code> to interpolate between linear contribution and square-root contribution.</td>
+          </tr>
+          <tr>
+            <td><code>Fancy=False</code></td>
+            <td>No explicit current flag. The closest current behavior is <code>harsh=True</code>, but that is not just "not fancy"; it is a stricter zero/discount rule.</td>
+            <td>Do not rely on <code>Fancy=False</code> as a current supported combination unless the old legacy code is restored.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="qf-vs-cocm">
+      <h2>QF vs COCM</h2>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>Technical Difference</h3>
+          <p>
+            <strong>QF</strong> operates per project and per donor. It sums square roots of contributions and
+            subtracts direct donations, which creates extra matching when many donors give to the same project.
+          </p>
+          <p>
+            <strong>COCM</strong> operates per target project, per donor, and per cluster. It builds a donor-cluster
+            proximity matrix <code>k_indicators</code>, scales target-project contributions into <code>K</code>,
+            projects those through normalized cluster memberships into <code>P_prime</code>, symmetrizes with
+            <code>sqrt(P_prime(g,h) * P_prime(h,g))</code>, and sums only off-diagonal cluster pairs.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Real-World Difference</h3>
+          <p>
+            <strong>QF</strong> asks: "How many people supported this project, and how strongly?" It works best
+            when donor choices are independent.
+          </p>
+          <p>
+            <strong>COCM</strong> asks: "Do these supporters represent independent communities, or are they one
+            coordinated cluster?" It is meant to reduce the advantage of collusive groups, tightly coordinated
+            fans, or many wallets that all share the same support pattern.
+          </p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>QF</th>
+            <th>COCM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Unit of independence</td>
+            <td>Individual donor</td>
+            <td>Donor's position across clusters/project affinities</td>
+          </tr>
+          <tr>
+            <td>Main risk it addresses</td>
+            <td>Underfunding public goods with broad small-donor support</td>
+            <td>Coordinated or correlated donor groups gaming QF assumptions</td>
+          </tr>
+          <tr>
+            <td>What gets boosted</td>
+            <td>More donors to the same project</td>
+            <td>Cross-cluster, reciprocal support patterns</td>
+          </tr>
+          <tr>
+            <td>What gets discounted</td>
+            <td>Nothing about donor similarity</td>
+            <td>Same-cluster or close-cluster support, especially with <code>harsh=True</code></td>
+          </tr>
+          <tr>
+            <td>Potential false negative</td>
+            <td>Can over-reward coordinated wallets</td>
+            <td>Can under-reward legitimate niche communities whose supporters naturally overlap</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="legacy-vs-og">
+      <h2>Legacy COCM vs COCM og</h2>
+      <p>
+        The names are easy to confuse. <code>Legacy COCM</code> is the old/original implementation replica.
+        <code>COCM og</code> is only one current <code>calcstyle</code> inside the modern <code>COCM()</code>
+        function. They are not the same algorithm.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th><code>Legacy COCM</code></th>
+            <th><code>COCM og</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Function</td>
+            <td><code>legacy_COCM(donation_df, cluster_df)</code></td>
+            <td><code>COCM(donation_df, cluster_df, calcstyle="og", harsh=...)</code></td>
+          </tr>
+          <tr>
+            <td><code>k_indicators</code></td>
+            <td>Boolean friend matrix -> fraction of friends in each cluster -> max with direct membership.</td>
+            <td>Weighted friendship matrix -> dot raw cluster matrix -> boolean <code>&gt; 0</code>.</td>
+          </tr>
+          <tr>
+            <td>Harsh support</td>
+            <td>No. Always uses fancy/non-harsh <code>K</code>.</td>
+            <td>Yes. Defaults to harsh in the CSV UI unless toggled off.</td>
+          </tr>
+          <tr>
+            <td>Alignment</td>
+            <td>Legacy align drops zero-row agents and mismatched indices, but does not drop zero-sum project/cluster columns.</td>
+            <td>Current <code>align()</code> also drops zero-sum project and cluster columns.</td>
+          </tr>
+          <tr>
+            <td>Duplicate donor/project donations in CSV calculator</td>
+            <td>Uses <code>aggfunc="mean"</code>.</td>
+            <td>Uses <code>aggfunc="sum"</code>.</td>
+          </tr>
+          <tr>
+            <td>Diagonal removal</td>
+            <td>Copies matrix to numpy and fills diagonal with zero.</td>
+            <td>Subtracts <code>np.trace(P.values)</code> from the matrix sum.</td>
+          </tr>
+          <tr>
+            <td>Closest current equivalent</td>
+            <td><code>COCM pct_friends</code> with <code>harsh=False</code>, same input aggregation, and no zero-sum-column differences.</td>
+            <td>None. It has its own broad boolean reachability indicator.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="settings">
+      <h2>Settings and Combinations</h2>
+
+      <h3>Which settings affect which algorithm?</h3>
+      <table class="tight">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th><code>harsh</code></th>
+            <th><code>pct_cocm</code></th>
+            <th><code>matching_cap_percent</code></th>
+            <th><code>cluster_df</code></th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>QF</code></td>
+            <td>No effect</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>No effect</td>
+            <td>Fallback branch for unknown algo names, including <code>TQF</code> after scaling.</td>
+          </tr>
+          <tr>
+            <td><code>COCM</code></td>
+            <td>Yes</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>Required</td>
+            <td>Default current COCM, <code>calcstyle="markov"</code>.</td>
+          </tr>
+          <tr>
+            <td><code>COCM og</code></td>
+            <td>Yes</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>Required</td>
+            <td>Boolean reachability style.</td>
+          </tr>
+          <tr>
+            <td><code>COCM pct_friends</code></td>
+            <td>Yes</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>Required</td>
+            <td>Fraction-of-friends style.</td>
+          </tr>
+          <tr>
+            <td><code>Legacy COCM</code></td>
+            <td>No effect, even though the CSV UI enables the toggle</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>Required</td>
+            <td>Separate early branch in <code>get_qf_matching()</code>.</td>
+          </tr>
+          <tr>
+            <td><code>half-and-half</code></td>
+            <td>Affects only the COCM half</td>
+            <td>No effect; always 50/50</td>
+            <td>Yes</td>
+            <td>Required for COCM half</td>
+            <td>Uses Markov COCM plus standard QF.</td>
+          </tr>
+          <tr>
+            <td><code>pctCOCM</code></td>
+            <td>Affects only the COCM leg</td>
+            <td>Yes</td>
+            <td>Yes</td>
+            <td>Required for COCM leg</td>
+            <td><code>1.0</code> is pure COCM, <code>0.0</code> is pure QF.</td>
+          </tr>
+          <tr>
+            <td><code>pairwise</code></td>
+            <td>No effect</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>No effect</td>
+            <td>Uses fixed <code>M=0.01</code> unless called directly with another value.</td>
+          </tr>
+          <tr>
+            <td><code>donation_profile_clustermatch</code></td>
+            <td>No effect</td>
+            <td>No effect</td>
+            <td>Yes</td>
+            <td>No external cluster input</td>
+            <td>Builds its own clusters from binary donation profiles.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>COCM calcstyle combinations</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Displayed algorithm</th>
+            <th><code>calcstyle</code></th>
+            <th><code>k_indicators</code> meaning</th>
+            <th>With <code>harsh=True</code></th>
+            <th>With <code>harsh=False</code></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>COCM</code></td>
+            <td><code>markov</code></td>
+            <td>Donor-to-cluster proximity through normalized project/donor transitions; continuous and weighted.</td>
+            <td>Close Markov-proximity directions are zeroed/discounted.</td>
+            <td>Close directions receive square-root/linear blended treatment.</td>
+          </tr>
+          <tr>
+            <td><code>COCM og</code></td>
+            <td><code>og</code></td>
+            <td>Boolean reachable-or-not cluster proximity from weighted co-donation friendship.</td>
+            <td>Any reachable cluster direction can be fully zeroed.</td>
+            <td>Reachable directions use <code>sqrt(c)</code>; unreachable directions use <code>c</code>.</td>
+          </tr>
+          <tr>
+            <td><code>COCM pct_friends</code></td>
+            <td><code>pct_friends</code></td>
+            <td>Fraction of local co-donation friends in each cluster, maxed with direct membership.</td>
+            <td>Discount is proportional to friend concentration.</td>
+            <td>Blend is proportional to friend concentration.</td>
+          </tr>
+          <tr>
+            <td><code>Legacy COCM</code></td>
+            <td>Separate function</td>
+            <td>Same family as pct-friends, with legacy alignment and aggregation details.</td>
+            <td>Not supported.</td>
+            <td>Always fancy/non-harsh.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Pre-processing settings that change every algorithm's input</h3>
+      <ul>
+        <li><code>min_donation_threshold_usd</code> removes small donations before the matrix is built.</li>
+        <li><code>min_passport_score</code> and <code>min_model_score</code> use OR logic in the CSV calculator when both are present: a donation is kept if it passes either threshold.</li>
+        <li>Self-votes are dropped when recipient/payout addresses are available.</li>
+        <li>The CSV calculator aggregates duplicate donor/project rows with <code>sum</code> for all algorithms except <code>Legacy COCM</code>, which uses <code>mean</code>.</li>
+        <li><code>matching_pool_usd</code> does not affect ranking before caps; it scales final dollars after shares are computed.</li>
+      </ul>
+    </section>
+
+    <section id="pairwise-differences">
+      <h2>Pair-by-Pair Differences</h2>
+      <p class="section-note">
+        This table covers the nine algorithm names exposed by the CSV calculator. It focuses on the one difference
+        that matters most when choosing between each pair.
+      </p>
+
+      <table class="tight">
+        <thead>
+          <tr>
+            <th>Pair</th>
+            <th>Main difference</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>QF</code> vs <code>COCM</code></td><td>QF rewards donor breadth directly; COCM rewards cross-cluster independence and discounts correlated support.</td></tr>
+          <tr><td><code>QF</code> vs <code>COCM og</code></td><td>QF ignores donor similarity; COCM og uses boolean reachability to decide which cluster directions are close and therefore discounted or square-rooted.</td></tr>
+          <tr><td><code>QF</code> vs <code>COCM pct_friends</code></td><td>QF counts donors independently; pct_friends COCM uses each donor's local co-donation neighborhood to measure coordination.</td></tr>
+          <tr><td><code>QF</code> vs <code>Legacy COCM</code></td><td>QF is donor-level quadratic matching; Legacy COCM is original/fancy cluster matching with friend-fraction proximity.</td></tr>
+          <tr><td><code>QF</code> vs <code>half-and-half</code></td><td>half-and-half keeps 50% QF behavior and adds 50% Markov COCM behavior.</td></tr>
+          <tr><td><code>QF</code> vs <code>pctCOCM</code></td><td>pctCOCM is QF only when <code>pct_cocm=0</code>; otherwise it blends in Markov COCM.</td></tr>
+          <tr><td><code>QF</code> vs <code>pairwise</code></td><td>Both are donor-pair based in spirit, but pairwise applies a similarity penalty between donor profiles; QF does not.</td></tr>
+          <tr><td><code>QF</code> vs <code>donation_profile_clustermatch</code></td><td>QF treats identical-profile donors as separate independent donors; donation_profile_clustermatch pools identical profiles into clusters before matching.</td></tr>
+
+          <tr><td><code>COCM</code> vs <code>COCM og</code></td><td>Both use current COCM math, but Markov COCM uses continuous transition proximity while og uses broad boolean reachability.</td></tr>
+          <tr><td><code>COCM</code> vs <code>COCM pct_friends</code></td><td>Markov COCM derives proximity through normalized project/donor transitions; pct_friends derives it from the fraction of local friends in each cluster.</td></tr>
+          <tr><td><code>COCM</code> vs <code>Legacy COCM</code></td><td>Current COCM is Markov by default and can be harsh; Legacy COCM is pct-friends style, always fancy/non-harsh, and preserves legacy alignment behavior.</td></tr>
+          <tr><td><code>COCM</code> vs <code>half-and-half</code></td><td>COCM is pure Markov COCM; half-and-half averages normalized Markov COCM with normalized QF.</td></tr>
+          <tr><td><code>COCM</code> vs <code>pctCOCM</code></td><td>pctCOCM equals COCM only at <code>pct_cocm=1</code>; otherwise it adds QF share.</td></tr>
+          <tr><td><code>COCM</code> vs <code>pairwise</code></td><td>COCM models clusters and off-diagonal cluster pairs; pairwise models donor-pair similarity without explicit clusters.</td></tr>
+          <tr><td><code>COCM</code> vs <code>donation_profile_clustermatch</code></td><td>COCM uses proximity and reciprocal cross-cluster signal; donation_profile_clustermatch simply applies QF after grouping identical donation profiles.</td></tr>
+
+          <tr><td><code>COCM og</code> vs <code>COCM pct_friends</code></td><td>og is boolean reachable/not reachable; pct_friends is graded by the share of a donor's friends in each cluster.</td></tr>
+          <tr><td><code>COCM og</code> vs <code>Legacy COCM</code></td><td>Despite the name, og is not the legacy replica. Legacy uses friend fractions and no harsh mode; og uses boolean reachability inside current COCM and supports harsh.</td></tr>
+          <tr><td><code>COCM og</code> vs <code>half-and-half</code></td><td>og is pure og-style COCM; half-and-half uses Markov COCM, not og, blended 50/50 with QF.</td></tr>
+          <tr><td><code>COCM og</code> vs <code>pctCOCM</code></td><td>og uses the og calcstyle; pctCOCM always blends QF with Markov COCM, not og.</td></tr>
+          <tr><td><code>COCM og</code> vs <code>pairwise</code></td><td>og discounts based on cluster reachability; pairwise discounts based on donor-profile dot-product similarity.</td></tr>
+          <tr><td><code>COCM og</code> vs <code>donation_profile_clustermatch</code></td><td>og computes COCM cross-cluster pair signal; donation_profile_clustermatch groups identical donor profiles and then applies cluster QF.</td></tr>
+
+          <tr><td><code>COCM pct_friends</code> vs <code>Legacy COCM</code></td><td>They are closest relatives. Current pct_friends can be harsh and drops zero-sum columns; Legacy is always fancy/non-harsh and keeps legacy alignment. CSV aggregation also differs.</td></tr>
+          <tr><td><code>COCM pct_friends</code> vs <code>half-and-half</code></td><td>pct_friends is pure pct-friends COCM; half-and-half uses Markov COCM plus QF.</td></tr>
+          <tr><td><code>COCM pct_friends</code> vs <code>pctCOCM</code></td><td>pct_friends is a COCM calcstyle; pctCOCM is a blend setting and always uses Markov COCM for its COCM leg.</td></tr>
+          <tr><td><code>COCM pct_friends</code> vs <code>pairwise</code></td><td>pct_friends looks at neighborhood membership by cluster; pairwise uses continuous donor-profile similarity and only common project pairs.</td></tr>
+          <tr><td><code>COCM pct_friends</code> vs <code>donation_profile_clustermatch</code></td><td>pct_friends uses friend fractions to discount COCM signal; donation_profile_clustermatch just pools identical support patterns.</td></tr>
+
+          <tr><td><code>Legacy COCM</code> vs <code>half-and-half</code></td><td>Legacy is pure old/fancy COCM; half-and-half is 50% current Markov COCM and 50% QF.</td></tr>
+          <tr><td><code>Legacy COCM</code> vs <code>pctCOCM</code></td><td>Legacy never blends with QF and never honors harsh; pctCOCM is an adjustable QF/current-Markov-COCM blend.</td></tr>
+          <tr><td><code>Legacy COCM</code> vs <code>pairwise</code></td><td>Legacy uses clusters and off-diagonal cluster-pair signal; pairwise uses donor pairs and a profile-similarity coefficient.</td></tr>
+          <tr><td><code>Legacy COCM</code> vs <code>donation_profile_clustermatch</code></td><td>Legacy uses friend-fraction COCM; donation_profile_clustermatch applies cluster QF to exact binary support-pattern clusters.</td></tr>
+
+          <tr><td><code>half-and-half</code> vs <code>pctCOCM</code></td><td>half-and-half is fixed at 50/50; pctCOCM is adjustable from 0/100 to 100/0 between QF and Markov COCM.</td></tr>
+          <tr><td><code>half-and-half</code> vs <code>pairwise</code></td><td>half-and-half blends two full allocation methods; pairwise is its own donor-pair coefficient method.</td></tr>
+          <tr><td><code>half-and-half</code> vs <code>donation_profile_clustermatch</code></td><td>half-and-half blends QF with Markov COCM; donation_profile_clustermatch is cluster QF over exact support profiles.</td></tr>
+
+          <tr><td><code>pctCOCM</code> vs <code>pairwise</code></td><td>pctCOCM is a QF/Markov-COCM blend; pairwise is a direct donor-pair algorithm with no COCM leg.</td></tr>
+          <tr><td><code>pctCOCM</code> vs <code>donation_profile_clustermatch</code></td><td>pctCOCM blends current COCM and QF shares; donation_profile_clustermatch changes the unit of QF from donors to exact donation-profile clusters.</td></tr>
+
+          <tr><td><code>pairwise</code> vs <code>donation_profile_clustermatch</code></td><td>pairwise rewards donor pairs with dissimilar profiles; donation_profile_clustermatch collapses identical profiles before applying QF.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="edge-cases">
+      <h2>Important Edge Cases and Caveats</h2>
+      <ul>
+        <li><strong>Legacy COCM ignores the Harsh toggle.</strong> The CSV UI enables the toggle for <code>Legacy COCM</code>, but <code>get_qf_matching()</code> routes legacy to <code>legacy_COCM()</code> before any harsh-aware branch.</li>
+        <li><strong>Legacy COCM can differ from current pct_friends even with <code>harsh=False</code>.</strong> The algorithmic core is similar, but alignment, duplicate aggregation, and zero-column handling can change outputs.</li>
+        <li><strong>All COCM methods drop diagonal cluster-pair signal.</strong> Same-cluster signal is not counted; only off-diagonal reciprocal cluster-pair signal becomes raw match.</li>
+        <li><strong>Single-project and all-project donor patterns can be weak under COCM.</strong> The legacy app explicitly warns that COCM can ignore or reduce these patterns as a by-product of the cross-cluster logic.</li>
+        <li><strong>Raw COCM signal is not final dollars.</strong> The checked-in legacy trace for <code>real_sampled.csv</code> has total raw COCM signal <code>126.16179064013517</code>, then normalizes, caps at 20%, and scales to a <code>$50,000</code> matching pool.</li>
+        <li><strong>Runtime comparison was not regenerated here.</strong> The local bare <code>python3</code> did not have <code>pandas</code> installed, so this report relies on source inspection and the checked-in trace rather than newly computed sample tables.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Decision Guide</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Use this</th>
+            <th>When you want</th>
+            <th>Watch out for</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>QF</code></td>
+            <td>Classic public-goods matching with a simple independence assumption.</td>
+            <td>Coordinated donors can look like independent donors.</td>
+          </tr>
+          <tr>
+            <td><code>COCM</code> with <code>harsh=True</code></td>
+            <td>The strongest current coordination discount.</td>
+            <td>Legitimate tight communities may be penalized.</td>
+          </tr>
+          <tr>
+            <td><code>COCM</code> with <code>harsh=False</code></td>
+            <td>A softer cluster-aware mechanism closer to legacy fancy scaling.</td>
+            <td>Less aggressive against coordinated same-cluster support.</td>
+          </tr>
+          <tr>
+            <td><code>Legacy COCM</code></td>
+            <td>Reproducing old/original COCM outputs as closely as this repo supports.</td>
+            <td>It is not harsh-aware and has special CSV aggregation/alignment behavior.</td>
+          </tr>
+          <tr>
+            <td><code>pctCOCM</code></td>
+            <td>A controlled migration between QF and current Markov COCM.</td>
+            <td>It cannot blend QF with <code>COCM og</code>, <code>pct_friends</code>, or Legacy COCM without code changes.</td>
+          </tr>
+          <tr>
+            <td><code>pairwise</code></td>
+            <td>A donor-pair method that penalizes similar overall donation profiles without explicit clusters.</td>
+            <td>The fixed <code>M=0.01</code> can make coefficients very small for similar profiles.</td>
+          </tr>
+          <tr>
+            <td><code>donation_profile_clustermatch</code></td>
+            <td>Reducing the influence of many donors with identical project sets.</td>
+            <td>It only groups exact binary support patterns, not softer similarity.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="faqs">
+      <h2>Frequently Asked Questions</h2>
+
+      <details>
+        <summary>1. Why do single-project donors often receive little or no matching signal under COCM?</summary>
+        <p>COCM only rewards <em>cross-cluster</em> support. A donor who only supports one project contributes only to that project’s own cluster direction. When the diagonal of the P matrix is dropped, that same-cluster signal is removed. Only donations that bridge different clusters generate matching.</p>
+      </details>
+
+      <details>
+        <summary>2. What is the main difference between standard QF and COCM?</summary>
+        <p>QF treats every donor as fully independent and applies quadratic scaling per project. COCM builds a model of donor–cluster proximity (using co-donation patterns) and discounts contributions that stay inside the same cluster, rewarding only the cross-cluster portion of support.</p>
+      </details>
+
+      <details>
+        <summary>3. Does turning on <code>harsh=True</code> change the total size of the matching pool?</summary>
+        <p>No. Harsh mode only changes the <em>relative shares</em> among projects. After normalization the total is always 100% of the pool (subject to the cap). It simply makes the penalty for same-cluster support stricter.</p>
+      </details>
+
+      <details>
+        <summary>4. Why does the Legacy COCM algorithm ignore the harsh toggle in the UI?</summary>
+        <p><code>get_qf_matching()</code> routes “Legacy COCM” to the separate <code>legacy_COCM()</code> function, which hard-codes the original non-harsh (fancy) scaling formula and never inspects the <code>harsh</code> parameter.</p>
+      </details>
+
+      <details>
+        <summary>5. How does the CSV calculator decide what the clusters are?</summary>
+        <p>It passes the donation matrix itself as <code>cluster_df</code>. Each donor’s pattern of projects they supported becomes their cluster membership vector. Projects therefore serve as both the funding targets and the affinity clusters.</p>
+      </details>
+
+      <details>
+        <summary>6. What does the raw signal returned by <code>standard_qf()</code> or <code>COCM()</code> represent?</summary>
+        <p>It is the <em>matching-only</em> portion before normalization, capping, and scaling to the actual dollar pool. You must add the original direct donations if you want a project’s total funding figure.</p>
+      </details>
+
+      <details>
+        <summary>7. Why is the diagonal of the P matrix always removed in COCM calculations?</summary>
+        <p>The diagonal represents same-cluster (self-to-self) signal. COCM’s design goal is to subsidize <em>mutual</em> support between <em>different</em> clusters. Same-cluster contributions are deliberately excluded.</p>
+      </details>
+
+      <details>
+        <summary>8. How does the matching cap work when a project exceeds the percentage limit?</summary>
+        <p><code>check_matching_cap()</code> iteratively clips the over-cap project to the limit and proportionally redistributes the excess percentage to all projects still below the cap, repeating until no project exceeds the cap. The cap runs after <code>min_matching_floor</code> is added, so a low cap can reduce a project's final match below the requested floor.</p>
+      </details>
+
+      <details>
+        <summary>8a. How does <code>min_matching_floor</code> affect pool accounting?</summary>
+        <p>The allocator reserves <code>project_count * min_matching_floor</code> first, runs the selected algorithm on the remaining pool, then adds the floor to each project before applying caps. If the requested floor is too large for the pool, the effective floor is scaled to <code>matching_pool / project_count</code> and the residual algorithmic pool becomes zero.</p>
+      </details>
+
+      <details>
+        <summary>9. What are the three <code>calcstyle</code> options for COCM and how do they differ?</summary>
+        <p><strong>markov</strong> uses a Markov-style random-walk proximity (PJP) to compute soft cluster membership. <strong>og</strong> uses a boolean “reachable through any friend” indicator. <strong>pct_friends</strong> uses the fraction of a donor’s friends that belong to each cluster (maxed with direct membership).</p>
+      </details>
+
+      <details>
+        <summary>10. When would you choose <code>pctCOCM</code> over <code>half-and-half</code>?</summary>
+        <p><code>pctCOCM</code> lets you dial any mixture (0 = pure QF, 1 = pure COCM). <code>half-and-half</code> is just the special case of 50/50. Use <code>pctCOCM</code> when you want a precise blend other than exactly 50%.</p>
+      </details>
+
+      <details>
+        <summary>11. What does <code>donation_profile_clustermatch</code> do that standard QF does not?</summary>
+        <p>It first groups donors who have <em>identical</em> binary support patterns into the same cluster, then runs quadratic funding over those clusters instead of individual donors. Many identical small donors are treated as one voice.</p>
+      </details>
+
+      <details>
+        <summary>12. How is the pairwise coefficient <code>k_i,j</code> computed?</summary>
+        <p><code>k_i,j = M / (M + dot(sqrt(profile_i), sqrt(profile_j)))</code> with M = 0.01. Donors with very similar overall donation profiles receive a small coefficient; dissimilar profiles receive a coefficient close to 1.</p>
+      </details>
+
+      <details>
+        <summary>13. What is TQF in Home.py and how does it relate to the current algorithms?</summary>
+        <p>TQF applies an arbitrary per-donor <code>scale_factor</code> (token weighting) to each row of the donation matrix and then falls back to standard QF. It is a legacy scaling path, not a distinct matching formula.</p>
+      </details>
+
+      <details>
+        <summary>14. Can any COCM variant ever distribute more total matching dollars than standard QF?</summary>
+        <p>No. All algorithms ultimately normalize their raw signal to sum to 1.0 before scaling to the matching pool. Differences are only in <em>which projects</em> receive larger or smaller shares.</p>
+      </details>
+
+      <details>
+        <summary>15. Why can Legacy COCM give different numbers from current COCM pct_friends even with <code>harsh=False</code>?</summary>
+        <p>Legacy uses older alignment logic (does not drop zero-sum projects/clusters), different aggregation of duplicate donors, and <code>fill_diagonal</code> instead of trace subtraction. These small input differences propagate to the final result.</p>
+      </details>
+
+      <details>
+        <summary>16. What happens during the <code>align()</code> step if a project has no donors or a cluster has no members?</summary>
+        <p>Zero-donor projects and zero-member clusters are dropped from the matrices. The functions still return a zero result for those projects so they appear correctly in the final output table.</p>
+      </details>
+
+      <details>
+        <summary>17. How is the friendship matrix built inside COCM?</summary>
+        <p><code>friendship_matrix = cluster_df.dot(cluster_df.transpose()) &gt; 0</code>. Two donors are considered friends if they share at least one cluster (i.e., they both donated to at least one common project when clusters = projects).</p>
+      </details>
+
+      <details>
+        <summary>18. What do the <code>k_indicators</code> values actually mean?</summary>
+        <p>For donor <code>i</code> and cluster <code>g</code>, <code>k(i,g)</code> is a number between 0 and 1 that represents how close donor <code>i</code> is to cluster <code>g</code>. 1 = direct member or fully connected through friends; 0 = completely unrelated through the friendship graph.</p>
+      </details>
+
+      <details>
+        <summary>19. Is there a single “best” algorithm recommended for most quadratic funding rounds?</summary>
+        <p>Most teams start with <code>COCM</code> + <code>harsh=True</code> for strong coordination resistance, or <code>pctCOCM</code> (≈ 0.3–0.6) when they want a gentle transition from classic QF. Pure QF remains the safest default when simplicity and maximum donor independence are paramount.</p>
+      </details>
+
+      <details>
+        <summary>20. How can I exactly reproduce the legacy COCM results from older versions of the tool?</summary>
+        <p>Select the “Legacy COCM” algorithm in the CSV calculator, or call <code>legacy_COCM(donation_df, cluster_df)</code> directly in Python. Make sure you use the same CSV preprocessing (no extra deduplication) and pass the original donation matrix as the cluster matrix.</p>
+      </details>
+    </section>
+
+    <p class="footer">
+      Generated from repository inspection and updated on 2026-05-14. Source files reviewed:
+      <code>fundingutils.py</code>, <code>V6_CSV_Calculator.py</code>, <code>Home.py</code>,
+      <code>cocm_full_trace/README.md</code>, and <code>cocm_full_trace_walkthrough.py</code>.
+    </p>
+  </main>
+</body>
+</html>

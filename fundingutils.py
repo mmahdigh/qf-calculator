@@ -395,19 +395,46 @@ def normalize(funding_dict):
 def crossfade(dict_1, dict_2, pct=0.5):
   return {p: (dict_1[p] * pct) + (dict_2[p] * (1-pct)) for p in dict_1.keys()}
 
+def _build_matching_result(projects, funding, matching_cap_percent, matching_amount, min_matching_floor=0):
+    matching_amount = max(0, float(matching_amount))
+    min_matching_floor = max(0, float(min_matching_floor or 0))
+    project_count = len(projects)
+    if project_count == 0:
+        return pd.DataFrame(columns=['project_name', 'matching_amount', 'matching_percent'])
+
+    if matching_amount == 0:
+        result = pd.DataFrame({'project_name': projects, 'matching_amount': 0.0})
+        result['matching_percent'] = 0.0
+        return result
+
+    effective_floor = min(min_matching_floor, matching_amount / project_count)
+    residual_pool = max(0.0, matching_amount - (effective_floor * project_count))
+    funding_normalized = normalize(funding)
+    result = pd.DataFrame(list(funding_normalized.items()), columns=['project_name', 'matching_amount'])
+    result['matching_amount'] = (result['matching_amount'].astype(float) * residual_pool) + effective_floor
+
+    # Apply caps after the floor is added. The cap is a percentage of the original pool,
+    # so capped excess can only redistribute to projects that remain under that cap.
+    result['matching_amount'] = result['matching_amount'] / matching_amount
+    if matching_cap_percent < 100:
+      result['matching_amount'] = check_matching_cap(result['matching_amount'], matching_cap_percent/100)
+    result['matching_percent'] = result['matching_amount'] * 100
+    result['matching_amount'] = result['matching_amount'] * matching_amount
+
+    # Prevent floating point overflow above the pool while preserving capped totals.
+    total_matching = sum(result['matching_amount'])
+    if total_matching > matching_amount:
+        result['matching_amount'] = result['matching_amount'] * (matching_amount / total_matching)
+        result['matching_percent'] = (result['matching_amount'] / matching_amount) * 100
+
+    return result
+
 @st.cache_resource(ttl=36000)
-def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df = None, pct_cocm=None, harsh=True):
+def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df = None, pct_cocm=None, harsh=True, min_matching_floor=0):
     projects = donation_df.columns
     if algo == 'Legacy COCM':
         funding = legacy_COCM(donation_df, cluster_df)
-        total_money = sum(funding.values())
-        funding_normalized = {p: funding[p]/total_money for p in projects}
-        result = pd.DataFrame(list(funding_normalized.items()), columns=['project_name', 'matching_amount'])
-        if matching_cap_percent < 100.0:
-            result['matching_amount'] = check_matching_cap(result['matching_amount'], matching_cap_percent/100)
-        result['matching_percent'] = result['matching_amount'] * 100
-        result['matching_amount'] = result['matching_amount'] * matching_amount
-        return result
+        return _build_matching_result(projects, funding, matching_cap_percent, matching_amount, min_matching_floor)
     if algo == 'donation_profile_clustermatch':
         funding = donation_profile_clustermatch(donation_df)
     elif algo == 'pairwise':
@@ -428,23 +455,9 @@ def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cl
         funding = crossfade(cocm_normalized, std_qf_normalized, pct=pct_cocm)
     else:
         funding = standard_qf(donation_df)
-    funding_normalized = normalize(funding)
-    # Create DataFrame with 'project_name' and 'matching_amount' columns
-    result = pd.DataFrame(list(funding_normalized.items()), columns=['project_name', 'matching_amount'])
-    # Apply the cap to the 'matching_amount' column
-    if matching_cap_percent < 100:
-      result['matching_amount'] = check_matching_cap(result['matching_amount'], matching_cap_percent/100)
-    # Scale the 'matching_amount' column by the total matching amount
-    result['matching_percent'] = result['matching_amount'] * 100
-    result['matching_amount'] = result['matching_amount'] * matching_amount
+    return _build_matching_result(projects, funding, matching_cap_percent, matching_amount, min_matching_floor)
 
-    #prevent overflow 
-    while (sum(result['matching_amount'])*1e18) > (matching_amount*1e18):
-        result['matching_amount'] = result['matching_amount'] * (matching_amount / sum(result['matching_amount']))
-
-    return result
-
-def tunable_qf(donation_df, token_distribution_df,algo, matching_cap_percent, matching_amount, cluster_df=None, pct_cocm=None):
+def tunable_qf(donation_df, token_distribution_df,algo, matching_cap_percent, matching_amount, cluster_df=None, pct_cocm=None, min_matching_floor=0):
     """
     Calculate quadratic funding with optional boost factors for donors.
     
@@ -470,7 +483,7 @@ def tunable_qf(donation_df, token_distribution_df,algo, matching_cap_percent, ma
                 donation_df.loc[voter] *= scale
     
     # Calculate QF with scaled votes
-    return get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df, pct_cocm)
+    return get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cluster_df, pct_cocm, min_matching_floor=min_matching_floor)
 
 
 def gini(l, on_gt_0 = True):

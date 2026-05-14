@@ -167,6 +167,7 @@ class RoundParams:
     round_name: str
     matching_pool_usd: float
     matching_cap_percentage: float
+    min_matching_floor_usd: float
     min_donation_threshold_usd: float
     min_passport_score: Optional[float]
     min_model_score: Optional[float]
@@ -198,6 +199,10 @@ def _coerce_numeric_series(s: pd.Series) -> pd.Series:
         .str.strip()
     )
     return pd.to_numeric(cleaned, errors="coerce")
+
+
+def _format_usd(value: float) -> str:
+    return f"${float(value):,.2f}"
 
 
 def _summarize_projects_for_export(donations_df: pd.DataFrame) -> pd.DataFrame:
@@ -338,6 +343,7 @@ def _compute_matching(
     engine: str,
     matching_pool_usd: float,
     matching_cap_percentage: float,
+    min_matching_floor_usd: float = 0.0,
     pct_cocm: float = 1.0,
     harsh: bool = True,
 ) -> pd.DataFrame:
@@ -357,6 +363,7 @@ def _compute_matching(
         cluster_df=donation_matrix,
         pct_cocm=float(pct_cocm),
         harsh=harsh,
+        min_matching_floor=float(min_matching_floor_usd),
     )
     # Normalize column naming to project_key + matchedUSD.
     matching_df = matching_df.rename(columns={"project_name": "project_key", "matching_amount": "matchedUSD"})
@@ -398,6 +405,7 @@ def _build_results_export(
     out["engine"] = params.engine
     out["matchingPoolUSD"] = float(params.matching_pool_usd)
     out["matchingCapPercentage"] = float(params.matching_cap_percentage)
+    out["minMatchingFloorUSD"] = float(params.min_matching_floor_usd)
     out["minDonationThresholdUSD"] = float(params.min_donation_threshold_usd)
     out["tokenSymbol"] = params.token_symbol
 
@@ -407,6 +415,7 @@ def _build_results_export(
             "engine",
             "matchingPoolUSD",
             "matchingCapPercentage",
+            "minMatchingFloorUSD",
             "minDonationThresholdUSD",
             "tokenSymbol",
             "applicationId",
@@ -658,6 +667,36 @@ def main() -> None:
         matching_pool_usd = st.number_input("Matching pool (USD)", min_value=0.0, value=50000.0, step=1000.0)
         matching_cap_percentage = st.slider("Matching cap (%)", min_value=0.0, max_value=100.0, value=20.0, step=1.0)
     with c3:
+        min_matching_floor_mode = st.radio(
+            "Min matching floor type",
+            options=["USD", "% of pool"],
+            horizontal=True,
+            help=(
+                "Guarantees each eligible project a baseline matching amount before the selected algorithm runs on the remaining pool. "
+                "The matching cap is still applied afterward, so a low cap can reduce the final floor."
+            ),
+        )
+        if min_matching_floor_mode == "% of pool":
+            min_matching_floor_percent = st.number_input(
+                "Min matching floor (% of pool)",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+            )
+            min_matching_floor_usd = float(matching_pool_usd) * (float(min_matching_floor_percent) / 100.0)
+            st.caption(f"Minimum floor per project: {_format_usd(min_matching_floor_usd)}")
+        else:
+            min_matching_floor_usd = st.number_input(
+                "Min matching floor (USD)",
+                min_value=0.0,
+                value=0.0,
+                step=100.0,
+                help=(
+                    "Per-project lower bound reserved before algorithmic matching. If there is not enough pool for every project, "
+                    "the effective floor is scaled down evenly."
+                ),
+            )
         min_donation_threshold_usd = st.number_input("Min donation threshold (USD)", min_value=0.0, value=0.0, step=1.0)
         token_symbol = st.text_input("Token symbol (for export metadata)", value="USD")
     with c4:
@@ -719,6 +758,7 @@ def main() -> None:
         round_name=round_name.strip() or "Uploaded round",
         matching_pool_usd=float(matching_pool_usd),
         matching_cap_percentage=float(matching_cap_percentage),
+        min_matching_floor_usd=float(min_matching_floor_usd),
         min_donation_threshold_usd=float(min_donation_threshold_usd),
         min_passport_score=(float(min_passport_score) if min_passport_score is not None else None),
         min_model_score=(float(min_model_score) if min_model_score is not None else None),
@@ -765,6 +805,18 @@ def main() -> None:
     c2.metric("Unique donors", f"{donations_df['voter'].nunique():,}")
     c3.metric("Unique projects", f"{donations_df['project_key'].nunique():,}")
     c4.metric("Total donated (USD)", f"${donations_df['amountUSD'].sum():,.2f}")
+    effective_floor_usd = min(
+        params.min_matching_floor_usd,
+        params.matching_pool_usd / donations_df['project_key'].nunique(),
+    )
+    if params.min_matching_floor_usd > effective_floor_usd:
+        st.info(
+            f"Requested minimum matching floor is {_format_usd(params.min_matching_floor_usd)} per project, "
+            f"but the pool only supports {_format_usd(effective_floor_usd)} across "
+            f"{donations_df['project_key'].nunique():,} projects. The lower effective floor will be used."
+        )
+    elif params.min_matching_floor_usd > 0:
+        st.caption(f"Minimum matching floor per project: {_format_usd(params.min_matching_floor_usd)}")
 
     with st.spinner("Computing matching…"):
         matching_df = _compute_matching(
@@ -772,6 +824,7 @@ def main() -> None:
             engine=params.engine,
             matching_pool_usd=params.matching_pool_usd,
             matching_cap_percentage=params.matching_cap_percentage,
+            min_matching_floor_usd=params.min_matching_floor_usd,
             pct_cocm=(float(pct_cocm) if params.engine == "pctCOCM" else 1.0),
             harsh=harsh,
         )
@@ -828,4 +881,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
