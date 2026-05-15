@@ -683,6 +683,11 @@ def main() -> None:
                 max_value=100.0,
                 value=0.0,
                 step=0.1,
+                help=(
+                    "Per-project lower bound expressed as a percentage of the matching pool. The resolved "
+                    "USD value is shown below and is reserved before algorithmic matching. If there is not "
+                    "enough pool for every project, the effective floor is scaled down evenly."
+                ),
             )
             min_matching_floor_usd = float(matching_pool_usd) * (float(min_matching_floor_percent) / 100.0)
             st.caption(f"Minimum floor per project: {_format_usd(min_matching_floor_usd)}")
@@ -805,18 +810,31 @@ def main() -> None:
     c2.metric("Unique donors", f"{donations_df['voter'].nunique():,}")
     c3.metric("Unique projects", f"{donations_df['project_key'].nunique():,}")
     c4.metric("Total donated (USD)", f"${donations_df['amountUSD'].sum():,.2f}")
+    project_count = donations_df['project_key'].nunique()
     effective_floor_usd = min(
         params.min_matching_floor_usd,
-        params.matching_pool_usd / donations_df['project_key'].nunique(),
+        params.matching_pool_usd / project_count,
     )
+    per_project_cap_usd = params.matching_pool_usd * (params.matching_cap_percentage / 100.0)
     if params.min_matching_floor_usd > effective_floor_usd:
         st.info(
             f"Requested minimum matching floor is {_format_usd(params.min_matching_floor_usd)} per project, "
             f"but the pool only supports {_format_usd(effective_floor_usd)} across "
-            f"{donations_df['project_key'].nunique():,} projects. The lower effective floor will be used."
+            f"{project_count:,} projects. The lower effective floor will be used."
         )
     elif params.min_matching_floor_usd > 0:
         st.caption(f"Minimum matching floor per project: {_format_usd(params.min_matching_floor_usd)}")
+
+    if (
+        params.matching_cap_percentage < 100
+        and effective_floor_usd > per_project_cap_usd > 0
+    ):
+        st.warning(
+            f"Matching cap ({_format_usd(per_project_cap_usd)} per project, "
+            f"{params.matching_cap_percentage:.2f}% of pool) is below the effective minimum floor "
+            f"({_format_usd(effective_floor_usd)} per project). The cap will win: each capped project "
+            "receives the cap and the remainder of the pool will be left undistributed."
+        )
 
     with st.spinner("Computing matching…"):
         matching_df = _compute_matching(

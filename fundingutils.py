@@ -409,7 +409,12 @@ def _build_matching_result(projects, funding, matching_cap_percent, matching_amo
 
     effective_floor = min(min_matching_floor, matching_amount / project_count)
     residual_pool = max(0.0, matching_amount - (effective_floor * project_count))
-    funding_normalized = normalize(funding)
+    # Defensive: some algorithms (e.g. legacy_COCM) may return a funding dict that
+    # omits projects dropped during their internal alignment. Fill missing projects
+    # with 0 so every input project still receives the floor and the final result
+    # has one row per project.
+    complete_funding = {p: float(funding.get(p, 0.0)) for p in projects}
+    funding_normalized = normalize(complete_funding)
     result = pd.DataFrame(list(funding_normalized.items()), columns=['project_name', 'matching_amount'])
     result['matching_amount'] = (result['matching_amount'].astype(float) * residual_pool) + effective_floor
 
@@ -434,8 +439,7 @@ def get_qf_matching(algo, donation_df, matching_cap_percent, matching_amount, cl
     projects = donation_df.columns
     if algo == 'Legacy COCM':
         funding = legacy_COCM(donation_df, cluster_df)
-        return _build_matching_result(projects, funding, matching_cap_percent, matching_amount, min_matching_floor)
-    if algo == 'donation_profile_clustermatch':
+    elif algo == 'donation_profile_clustermatch':
         funding = donation_profile_clustermatch(donation_df)
     elif algo == 'pairwise':
         funding = pairwise(donation_df)
